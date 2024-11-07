@@ -2,6 +2,7 @@
 # Author: Zhenyu Bo
 # Date: 2024-11-06
 
+import ast
 import csv
 import pandas as pd
 import synonyms
@@ -50,7 +51,7 @@ def generate_word_id_list(synonym_pairs: list[tuple[str, str]]) -> dict[str, lis
         csv_reader = csv.reader(f)
         next(csv_reader)  # 跳过表头
         for row in csv_reader:
-            index_table[row[0]] = eval(row[1])
+            index_table[row[0]] = ast.literal_eval(row[1])
 
     for word, synonym in synonym_pairs:
         word_ids = index_table.get(word, [])
