@@ -4,6 +4,7 @@
 
 import ast
 import pandas as pd
+from math import sqrt
 
 
 def read_words_from_csv(file_path):
@@ -42,12 +43,19 @@ def generate_inverted_index_table(all_words, documents, output_file):
         doc_ids = [doc_id for doc_id, words in documents.items() if word in words]
         doc_ids_sorted = sorted(doc_ids)
         num_docs = len(doc_ids_sorted)
+        l = sqrt(num_docs)
         skip_table = []
-        for i in range(num_docs):
-            if num_docs > 2 and i % 2 == 0 and i < num_docs - 2:
-                skip_info = {'index': i + 2, 'value': doc_ids_sorted[i + 2]}
-            else:
-                skip_info = {'index': None, 'value': None}
+        if num_docs > l:
+            for i in range(num_docs):
+                if i % l == 0:
+                    if i < num_docs - l:
+                        skip_info = {'index': i + l, 'value': doc_ids_sorted[i + l]}
+                    else:
+                        # 最后一个跳表指针指向末尾
+                        skip_info = {'index': num_docs - 1, 'value': doc_ids_sorted[num_docs - 1]}
+                    skip_table.append(skip_info)
+        else:
+            skip_info = {'index': None, 'value': None}
             skip_table.append(skip_info)
         inverted_index_table.append({'word': word, 'id_list': doc_ids_sorted, 'skip_table': skip_table})
     pd.DataFrame(inverted_index_table).to_csv(output_file, index=False)
