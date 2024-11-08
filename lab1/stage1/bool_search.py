@@ -5,7 +5,7 @@ import re
 
 # 倒排索引表，movie_inverted_index_table.csv 
 # 全id表，Movie_id.txt
-# 词表，movie_words.csv 用于打印结果
+# 词表，movie_words.csv 用于打印结果 目前格式同助教提供的selected_book_top_1200.csv
 
 
 def read_inverted_index(file_path):
