@@ -43,7 +43,7 @@ def generate_inverted_index_table(all_words, documents, output_file):
         doc_ids = [doc_id for doc_id, words in documents.items() if word in words]
         doc_ids_sorted = sorted(doc_ids)
         num_docs = len(doc_ids_sorted)
-        l = sqrt(num_docs)
+        l = int(sqrt(num_docs))  # 设置跳表的间隔
         skip_table = []
         if num_docs > l:
             for i in range(num_docs):
