@@ -164,54 +164,25 @@ def query_posting_list(word, term_string, term_table, posting_list_file_path):
 
 
 def main():
+    # 处理书籍数据
     # 定义文件路径
-    input_csv = 'data/book_inverted_index_table.csv'
-    term_string_file = 'data/term_string.txt'
-    term_table_file = 'data/term_table.csv'
-    posting_list_file = 'data/posting_list.txt'
+    book_input_csv = 'data/book_inverted_index_table.csv'
+    book_term_string_file = 'data/book_term_string.txt'
+    book_term_table_file = 'data/book_term_table.csv'
+    book_posting_list_file = 'data/book_posting_list.txt'
 
     # 处理倒排索引表
-    process_inverted_index(input_csv, term_string_file, term_table_file, posting_list_file)
-    print('词典和倒排表已成功生成。')
+    process_inverted_index(book_input_csv, book_term_string_file, book_term_table_file, book_posting_list_file)
+    print('书籍词典和倒排表已成功生成。')
 
-    # 定义文件路径
-    term_string_file_path = 'data/term_string.txt'
-    term_table_file_path = 'data/term_table.csv'
-    posting_list_file_path = 'data/posting_list.txt'
+    # 处理电影数据
+    movie_input_csv = 'data/movie_inverted_index_table.csv'
+    movie_term_string_file = 'data/movie_term_string.txt'
+    movie_term_table_file = 'data/movie_term_table.csv'
+    movie_posting_list_file = 'data/movie_posting_list.txt'
 
-    # 检查文件是否存在
-    if not os.path.exists(term_string_file_path):
-        print(f"词项字符串文件 '{term_string_file_path}' 不存在。")
-        return
-    if not os.path.exists(term_table_file_path):
-        print(f"词项表文件 '{term_table_file_path}' 不存在。")
-        return
-    if not os.path.exists(posting_list_file_path):
-        print(f"倒排表文件 '{posting_list_file_path}' 不存在。")
-        return
-
-    # 加载词项字符串和词项表
-    term_string = load_term_string(term_string_file_path)
-    term_table = load_term_table(term_table_file_path)
-    if not term_string or not term_table:
-        print("词项字符串或词项表加载失败或为空。")
-        return
-
-    while True:
-        # 用户输入词项
-        word = input("请输入要查询的词项（输入 'exit' 退出）：").strip()
-        if word.lower() == 'exit':
-            print("退出查询。")
-            break
-
-        # 查询倒排列表
-        doc_ids = query_posting_list(word, term_string, term_table, posting_list_file_path)
-
-        if doc_ids:
-            print(f"词项 '{word}' 对应的文档 ID 列表（共 {len(doc_ids)} 个文档）:")
-            print(doc_ids)
-        else:
-            print(f"词项 '{word}' 没有对应的文档或查询失败。")
+    process_inverted_index(movie_input_csv, movie_term_string_file, movie_term_table_file, movie_posting_list_file)
+    print('电影词典和倒排表已成功生成。')
 
 
 if __name__ == '__main__':
