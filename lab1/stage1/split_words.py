@@ -5,7 +5,7 @@ import thulac
 from tqdm import tqdm  # 导入 tqdm 库
 import os
 
-def process_tags(tags_str, mode='jieba'):
+def process_tags(tags_str: str, mode='jieba') -> list[str]:
     # 将字符串形式的集合转换为实际的集合对象
     tags = ast.literal_eval(tags_str)
     words_set = set()
@@ -36,7 +36,7 @@ def process_tags(tags_str, mode='jieba'):
 
     return list(words_set)
 
-def process_file(input_file, output_file, id_name, mode='jieba'):
+def process_file(input_file: str, output_file: str, id_name: str, mode='jieba') -> None:
     data = pd.read_csv(input_file)
     ids = data[id_name].tolist()
     tags_list = data['Tags'].tolist()

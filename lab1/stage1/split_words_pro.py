@@ -23,7 +23,17 @@ with open('data/dict_synonym.txt', 'r', encoding='utf-8') as f:
             for word in words:
                 synonym_dict[word] = main_word
 
-def correct_word(word, vocabulary):
+def correct_word(word: str, vocabulary: set[str]) -> str:
+    '''
+    使用编辑距离进行纠错
+
+    输入：
+    - word: 待纠错的词
+    - vocabulary: 词汇表
+
+    输出：
+    - word: 纠错后的词
+    '''
     # 使用编辑距离进行纠错
     closest_matches = difflib.get_close_matches(word, vocabulary, n=1, cutoff=0.8)
     if closest_matches:
@@ -31,7 +41,17 @@ def correct_word(word, vocabulary):
     else:
         return word
 
-def process_tags(tags_str, mode='jieba'):
+def process_tags(tags_str: str, mode='jieba') -> list[str]:
+    '''
+    对标签进行分词处理
+
+    输入：
+    - tags_str: 标签字符串
+    - mode: 分词模式，可选 'jieba'，'thulac'，'both'
+
+    输出：
+    - 分词后的词列表
+    '''
     # 将字符串形式的集合转换为实际的集合对象
     tags = ast.literal_eval(tags_str)
     words_set = set()
@@ -83,7 +103,8 @@ def process_tags(tags_str, mode='jieba'):
 
     return list(final_words)
 
-def process_file(input_file, output_file, id_name, mode='jieba'):
+def process_file(input_file: str, output_file: str, id_name: str, mode='jieba') -> None:
+
     data = pd.read_csv(input_file)
     ids = data[id_name].tolist()
     tags_list = data['Tags'].tolist()
