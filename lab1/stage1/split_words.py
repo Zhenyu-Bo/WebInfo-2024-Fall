@@ -3,6 +3,7 @@ import ast
 import jieba
 import thulac
 from tqdm import tqdm  # 导入 tqdm 库
+import os
 
 def process_tags(tags_str, mode='jieba'):
     # 将字符串形式的集合转换为实际的集合对象
@@ -47,6 +48,12 @@ def process_file(input_file, output_file, id_name, mode='jieba'):
         processed_data.append({'id': doc_id, 'words': words})
         
     df = pd.DataFrame(processed_data)
+
+    # 获取输出文件的目录路径
+    output_dir = os.path.dirname(output_file)
+    # 如果目录不存在，创建目录
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
     df.to_csv(output_file, index=False)
 
 if __name__ == "__main__":
