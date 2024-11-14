@@ -6,7 +6,6 @@
 在经过可变长度编码压缩后的倒排索引表上执行布尔查询。
 """
 
-import csv
 import pandas as pd
 import ast
 import re
@@ -99,12 +98,12 @@ def main():
     print("正在加载数据，请稍候...")
 
     # 加载书籍数据
-    book_all_ids = read_all_ids('Book_id.txt')
-    book_words_df = pd.read_csv('book_words.csv', dtype={'id': int, 'words': str})
+    book_all_ids = read_all_ids('data/Book_id.txt')
+    book_words_df = pd.read_csv('data/book_words.csv', dtype={'id': int, 'words': str})
 
     # 加载电影数据
-    movie_all_ids = read_all_ids('Movie_id.txt')
-    movie_words_df = pd.read_csv('movie_words.csv', dtype={'id': int, 'words': str})
+    movie_all_ids = read_all_ids('data/Movie_id.txt')
+    movie_words_df = pd.read_csv('data/movie_words.csv', dtype={'id': int, 'words': str})
 
     print("数据加载完成！")
 

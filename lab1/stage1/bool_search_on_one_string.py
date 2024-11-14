@@ -98,15 +98,15 @@ def main():
         term_string_file_path = 'data/book_term_string.txt'
         term_table_file_path = 'data/book_term_table.csv'
         posting_list_file_path = 'data/book_posting_list.txt'
-        all_ids_file_path = 'Book_id.txt'
-        words_df_file_path = 'book_words.csv'
+        all_ids_file_path = 'data/Book_id.txt'
+        words_df_file_path = 'data/book_words.csv'
     elif choice == '2':
         # 定义电影文件路径
         term_string_file_path = 'data/movie_term_string.txt'
         term_table_file_path = 'data/movie_term_table.csv'
         posting_list_file_path = 'data/movie_posting_list.txt'
-        all_ids_file_path = 'Movie_id.txt'
-        words_df_file_path = 'movie_words.csv'
+        all_ids_file_path = 'data/Movie_id.txt'
+        words_df_file_path = 'data/movie_words.csv'
     else:
         print("输入错误，请输入 1 或 2。")
         return

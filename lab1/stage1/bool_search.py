@@ -107,14 +107,14 @@ def main():
     print("正在加载数据，请稍候...")
 
     # 加载书籍数据
-    book_inverted_index = read_inverted_index('book_inverted_index_table.csv')
-    book_all_ids = read_all_ids('Book_id.txt')
-    book_words_df = pd.read_csv('book_words.csv', dtype={'id': int, 'words': str})
+    book_inverted_index = read_inverted_index('data/book_inverted_index_table.csv')
+    book_all_ids = read_all_ids('data/Book_id.txt')
+    book_words_df = pd.read_csv('data/book_words.csv', dtype={'id': int, 'words': str})
 
     # 加载电影数据
-    movie_inverted_index = read_inverted_index('movie_inverted_index_table.csv')
-    movie_all_ids = read_all_ids('Movie_id.txt')
-    movie_words_df = pd.read_csv('movie_words.csv', dtype={'id': int, 'words': str})
+    movie_inverted_index = read_inverted_index('data/movie_inverted_index_table.csv')
+    movie_all_ids = read_all_ids('data/Movie_id.txt')
+    movie_words_df = pd.read_csv('data/movie_words.csv', dtype={'id': int, 'words': str})
 
     print("数据加载完成！")
 
