@@ -1,7 +1,3 @@
-# -*- coding: utf-8 -*-
-# Author: Zhenyu Bo
-# Date: 2024-11-14
-
 import pandas as pd
 import ast
 import jieba
