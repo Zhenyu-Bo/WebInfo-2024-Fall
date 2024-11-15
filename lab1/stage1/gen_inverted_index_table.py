@@ -65,10 +65,12 @@ def main():
     # 处理书籍数据
     all_book_words, book_documents = read_words_from_csv("data/book_words.csv")
     generate_inverted_index_table(all_book_words, book_documents, "data/book_inverted_index_table.csv")
+    print("书籍倒排索引表已成功生成")
 
     # 处理电影数据
     all_movie_words, movie_documents = read_words_from_csv("data/movie_words.csv")
     generate_inverted_index_table(all_movie_words, movie_documents, "data/movie_inverted_index_table.csv")
+    print("电影倒排索引表已成功生成")
 
 
 if __name__ == "__main__":

@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+# Author: Zhenyu Bo
+# Date: 2024-11-14
+
 import pandas as pd
 import ast
 import jieba
@@ -61,6 +65,6 @@ if __name__ == "__main__":
     mode = 'jieba'
 
     # 处理书籍数据
-    process_file('../data/selected_book_top_1200_data_tag.csv', 'split_output/book_words.csv', 'Book', mode)
+    process_file('../data/selected_book_top_1200_data_tag.csv', 'data/book_words.csv', 'Book', mode)
     # 处理电影数据
-    process_file('../data/selected_movie_top_1200_data_tag.csv', 'split_output/movie_words.csv', 'Movie', mode)
+    process_file('../data/selected_movie_top_1200_data_tag.csv', 'data/movie_words.csv', 'Movie', mode)
