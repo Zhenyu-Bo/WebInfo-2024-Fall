@@ -140,7 +140,7 @@ def main():
     while True:
         # 用户输入词项
         word = input("请输入要查询的词项（输入 'exit' 退出）：").strip()
-        
+
         # 检查是否退出
         if word.lower() == 'exit':
             print("退出查询。")
