@@ -8,55 +8,9 @@
 
 import pandas as pd
 import ast
-import re
 from var_len_decompress import get_inverted_index_list
+from bool_search import read_all_ids, tokenize, infix_to_postfix, display_results
 
-# 倒排索引表，movie_inverted_index_table.csv 
-# 全id表，Movie_id.txt
-# 词表，movie_words.csv 用于打印结果 目前格式同助教提供的selected_book_top_1200.csv
-
-def read_all_ids(file_path):
-    """
-    读取所有ID，返回ID的集合。
-    """
-    all_ids = set()
-    with open(file_path, 'r', encoding='utf-8') as f:
-        for line in f:
-            id = int(line.strip())
-            all_ids.add(id)
-    return all_ids
-
-def tokenize(expression):
-    """
-    将布尔表达式分词。
-    """
-    tokens = re.findall(r'AND|OR|NOT|\w+|\(|\)', expression)
-    return tokens
-
-def infix_to_postfix(tokens):
-    """
-    将中缀表达式转换为后缀表达式（逆波兰表达式）。
-    """
-    precedence = {'NOT': 3, 'AND': 2, 'OR': 1}
-    output = []
-    operator_stack = []
-    operators = {'AND', 'OR', 'NOT'}
-    for token in tokens:
-        if token not in operators and token not in {'(', ')'}:
-            output.append(token)
-        elif token == '(':
-            operator_stack.append(token)
-        elif token == ')':
-            while operator_stack and operator_stack[-1] != '(':
-                output.append(operator_stack.pop())
-            operator_stack.pop()  # 弹出 '('
-        else:  # 操作符
-            while operator_stack and operator_stack[-1] != '(' and precedence.get(operator_stack[-1], 0) >= precedence.get(token, 0):
-                output.append(operator_stack.pop())
-            operator_stack.append(token)
-    while operator_stack:
-        output.append(operator_stack.pop())
-    return output
 
 def evaluate_postfix(postfix_tokens, compressed_file_path, vocabulary_file_path, all_ids):
     """
@@ -68,31 +22,18 @@ def evaluate_postfix(postfix_tokens, compressed_file_path, vocabulary_file_path,
         if token not in operators:
             inverted_index = get_inverted_index_list(token, compressed_file_path, vocabulary_file_path)
             stack.append(set(inverted_index))
-        elif token == 'NOT':
+        elif token == 'NOT' or token == 'not':
             operand = stack.pop()
             stack.append(all_ids - operand)
         else:
             right = stack.pop()
             left = stack.pop()
-            if token == 'AND':
+            if token == 'AND' or token == 'and':
                 stack.append(left & right)
-            elif token == 'OR':
+            elif token == 'OR' or token == 'or':
                 stack.append(left | right)
     return stack.pop() if stack else set()
 
-def display_results(result_ids, words_df):
-    """
-    根据查询结果的ID，从 DataFrame 中查找并打印ID和标签。
-    """
-    df = words_df[words_df['id'].isin(result_ids)]
-    if not df.empty:
-        for _, row in df.iterrows():
-            id = row['id']
-            words = ast.literal_eval(row['words'])
-            print(f"ID: {id}")
-            print(f"标签: {', '.join(words)}\n")
-    else:
-        print("没有符合条件的结果。")
 
 def main():
     print("正在加载数据，请稍候...")
