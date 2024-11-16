@@ -24,13 +24,18 @@ def variable_byte_decode(byte_data: bytes) -> list[int]:
     current_number = 0
     for byte in byte_data:
         if byte >= 128:
-            # 当最高位为1时，这是一个数字的最后一个字节
+            # 当最高位为1时，这是一个数字的第一个字节
+            # 先将之前的数字加入列表
+            if current_number != 0:
+                numbers.append(current_number)
+                current_number = 0
+            # 去掉最高位的1，得到数字的高位
             current_number = (current_number << 7) | (byte - 128)
-            numbers.append(current_number)
-            current_number = 0
         else:
             # 当最高位为0时，这是一个数字的中间字节
             current_number = (current_number << 7) | byte
+    # 将最后一个数字加入列表
+    numbers.append(current_number)
     return numbers
 
 
@@ -132,16 +137,22 @@ def main():
     compressed_file_path = "data/book_inverted_index_compressed.bin"
     vocabulary_file_path = "data/book_vocabulary.csv"
 
-    # 用户输入词项
-    word = input("请输入要查询的词项: ").strip()
+    while True:
+        # 用户输入词项
+        word = input("请输入要查询的词项（输入 'exit' 退出）：").strip()
+        
+        # 检查是否退出
+        if word.lower() == 'exit':
+            print("退出查询。")
+            break
 
-    # 获取并解压缩倒排索引
-    doc_ids = get_inverted_index_list(word, compressed_file_path, vocabulary_file_path)
+        # 获取并解压缩倒排索引
+        doc_ids = get_inverted_index_list(word, compressed_file_path, vocabulary_file_path)
 
-    if doc_ids:
-        print(f"词项 '{word}' 对应的文档 ID 列表: {doc_ids}")
-    else:
-        print(f"词项 '{word}' 没有对应的文档或解压缩失败。")
+        if doc_ids:
+            print(f"词项 '{word}' 对应的文档 ID 列表: {doc_ids}")
+        else:
+            print(f"词项 '{word}' 没有对应的文档或解压缩失败。")
 
 
 if __name__ == "__main__":

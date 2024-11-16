@@ -21,20 +21,16 @@ def variable_byte_encode(gaps: list[int]) -> bytes:
     - 压缩后的字节序列。
     """
     encoded_bytes = []
-
     for gap in gaps:
         byte_chunks = []
         while gap >= 128:
-            gap, remainder = divmod(gap, 128)
-            byte_chunks.append(remainder)
-        byte_chunks.append(gap)  # 最后一位不需要继续分割
-        # 将最后一个字节的最高位设为1，其余设为0
-        byte_chunks[-1] += 128
-        # 直接按正确顺序添加到结果中
+            byte_chunks.append(gap % 128)
+            gap = gap // 128
+        byte_chunks.append(gap + 128)  # 设置最后一个字节的最高位为1
+        # 由于要按大端顺序存储，反转字节顺序
+        byte_chunks = byte_chunks[::-1]
         encoded_bytes.extend(byte_chunks)
-
     return bytes(encoded_bytes)
-
 
 def calculate_gaps(index_list: list[int]) -> list[int]:
     """
