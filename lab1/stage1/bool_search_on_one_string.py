@@ -7,7 +7,7 @@
 """
 
 import pandas as pd
-import ast
+import time
 from dictionary_as_a_string import load_term_string, load_term_table, query_posting_list
 from bool_search import read_all_ids, tokenize, infix_to_postfix, display_results
 
@@ -71,14 +71,21 @@ def main():
             continue  # 重新开始循环
 
         expression = input("请输入布尔查询表达式：\n")
+        # 记录查询开始时间
+        start_time = time.time()
         tokens = tokenize(expression)
         postfix_tokens = infix_to_postfix(tokens)
         result_ids = evaluate_postfix(postfix_tokens, term_string, term_table, posting_list_file_path, all_ids)
+        # 计算查询耗时
+        elapsed_time = time.time() - start_time
+
         if result_ids:
             print("查询结果：\n")
             display_results(result_ids, words_df)
         else:
             print("没有符合条件的结果。")
+
+        print(f"查询耗时：{elapsed_time:.6f} 秒")
 
         cont = input("是否继续查询？(Y/N): ")
         if cont.strip().lower() != 'y':
