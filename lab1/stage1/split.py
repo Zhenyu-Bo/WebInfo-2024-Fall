@@ -3,6 +3,43 @@ import jieba
 import pkuseg
 import ast
 
+def is_word_valid(word):
+    """
+    检查词语是否包含非法字符。
+    
+    参数：
+    - word: 要检查的词语。
+    
+    返回：
+    - 如果词语不包含非法字符，则返回 True；否则返回 False。
+    """
+    # 方法1：使用定义的非法字符集
+    for char in word:
+        if char in ILLEGAL_CHARS:
+            return False
+    return True
+
+    # 方法2：使用正则表达式
+    # return not bool(ILLEGAL_CHARS_PATTERN.search(word))
+
+def escape_illegal_chars(text):
+    """
+    将非法字符转换为 Unicode 转义序列。
+    
+    参数：
+    - text: 原始字符串。
+    
+    返回：
+    - 转义后的字符串。
+    """
+    return text.encode('unicode_escape').decode('utf-8')
+
+# 定义非法字符集
+ILLEGAL_CHARS = {'§', '#', '$', '%', '&', '*', '!', '@', '^', '(', ')', '-', '=', '+', '{', '}', '[', ']', '|', '\\', ':', ';', '"', "'", '<', '>', ',', '.', '?', '/'}
+
+# 或者使用正则表达式排除含有非法字符的词语
+# ILLEGAL_CHARS_PATTERN = re.compile(r'[§#$%&*!@^()\-=+{}\[\]|\\:;"\'<>,.?/]')
+
 # 选择分词工具
 tool_choice = input("请选择分词工具（输入 'jieba' 或 'pkuseg'）：")
 if tool_choice.lower() == 'jieba':
@@ -53,10 +90,13 @@ for file_pair in file_list:
     with open(input_file, 'r', encoding='utf-8') as csvfile_in, \
          open(output_file, 'w', encoding='utf-8', newline='') as csvfile_out:
         reader = csv.reader(csvfile_in)
-        writer = csv.writer(csvfile_out)
+        writer = csv.writer(csvfile_out, quoting=csv.QUOTE_MINIMAL)
 
-        # 读取并写入表头
-        header = next(reader)
+        # 跳过输入文件的第一行
+        next(reader)
+
+        # 写入输出文件的表头
+        header = ['id', 'words']
         writer.writerow(header)
 
         for row in reader:
@@ -66,8 +106,8 @@ for file_pair in file_list:
             # 解析 Tags 字段
             try:
                 tags_set = ast.literal_eval(tags_str)
-            except:
-                print(f"解析文件 {input_file} 中的 ID {item_id} 的标签时出错")
+            except Exception as e:
+                print(f"解析文件 {input_file} 中的 ID {item_id} 的标签时出错: {e}")
                 continue
 
             # 分词、去停用词、替换同义词
@@ -80,12 +120,16 @@ for file_pair in file_list:
 
                 for word in words:
                     word = word.strip()
-                    if word and word not in stopwords:
+                    if word and word not in stopwords and is_word_valid(word):
                         # 替换同义词
                         representative = synonym_dict.get(word, word)
+                        # 转义单引号
+                        representative = representative.replace("'", "\\'")
+                        # 转义非法字符（此步骤可选，如果已经过滤，可以移除）
+                        # representative = escape_illegal_chars(representative)
                         new_tags.add(representative)
 
-            # 重建 Tags 字符串
+            # 重建 Tags 字符串，确保格式正确
             new_tags_str = "{" + ", ".join(f"'{tag}'" for tag in new_tags) + "}"
             writer.writerow([item_id, new_tags_str])
 
