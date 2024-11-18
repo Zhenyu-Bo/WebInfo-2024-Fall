@@ -10,6 +10,40 @@ PB22081571薄震宇	PB22111613王翔辉	PB22020514郭东昊
 
 **stage2**：基于豆瓣 Movie&Book 的 tag 信息、以及提供的豆瓣电影与书籍的评分记录以及用户间的社交关系，判断用户的偏好，对用户交互过的 item（电影、书籍）进行（基于得分预测的）排序。
 
+## 文件组织
+
+目录结构及文件含义如下
+
+```
+├── data/			// 本次实验提供的数据文件
+├── figs/			// 图片文件
+├── stage1/			// 第一阶段
+│   ├── data/		// 第一阶段生成的数据文件
+│   ├── doc			// 第一阶段的相关文档
+│   ├── notebook
+│   ├── bool_search.py	// 实现布尔查询
+│   ├── bool_search_on_one_string.py  	// 实现将词项看作单一字符串压缩对应的布尔查询
+│   ├── bool_search_with_skip_list.py	// 实现使用跳表指针的布尔查询
+│   ├── dictionary_as_a_string.py		// 实现将词项看作单一字符串的压缩及查询一个词项的倒排列表
+│   ├── extract_id.py					// 提取所有文档ID
+│   ├── gen_inverted_index_table.py		// 生成倒排索引表
+│   ├── split.py						// 实现分词等预处理操作
+│   ├── var_len_bool_search.py			// 实现间距代替ID+可变长度编码压缩对应的布尔查询
+│   ├── var_len_compress.py				// 实现间距代替ID+可变长度编码压缩方式的索引压缩
+│   └── var_len_search_one_word.py		// 实现间距代替ID+可变长度编码压缩的查询一个词项的倒排列表
+├── stage2/			// 第二阶段
+│   ├── data/
+│   ├── doc/
+│   ├── graph_rec_model.py
+│   ├── graphrec.ipynb
+│   ├── test.py
+│   ├── text_embedding.ipynb
+│   └── utils.py
+└── report.md		// 实验报告
+```
+
+
+
 ## 实验过程
 
 ### stage1
@@ -509,9 +543,9 @@ if token not in operators:
 
 压缩前后的倒排索引表的相关文件大小如下：
 
-![compress1](figs/compress1_book.png)
+![compress1](C:\Users\bzy\Downloads\figs\compress1_book.png)
 
-![compress1](figs/compress1_movie.png)
+![compress1](C:\Users\bzy\Downloads\figs\compress1_movie.png)
 
 第一张图中的`book_inverted_index_table.csv`是书籍数据的原始倒排索引表，`book_posting_list`，`book_term_string`，`book_term_table`是对书籍倒排索引表进行压缩后得到的三个文件。
 
@@ -655,9 +689,9 @@ if token not in operators:
 
 压缩前后的倒排索引表的相关文件大小如下：
 
-![compress2](figs/compress2_book.png)
+![compress2](C:\Users\bzy\Downloads\figs\compress2_book.png)
 
-![compress2](figs/compress2_movie.png)
+![compress2](C:\Users\bzy\Downloads\figs\compress2_movie.png)
 
 第一张图中的`book_inverted_index_table.csv`是书籍数据的原始倒排索引表，`book_inverted_index_compressed.bin`和`book_vocabulary.csv`是对书籍倒排索引表进行压缩后得到的两个个文件。
 
