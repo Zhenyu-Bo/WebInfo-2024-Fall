@@ -24,45 +24,12 @@ from models import MatrixFactorization
 from train import train_model
 
 def main():
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f'使用设备: {device}')
-
-    # 初始化BERT模型和分词器
-    print("正在加载BERT模型和分词器……")
-    tokenizer = BertTokenizer.from_pretrained('bert-base-chinese')
-    model_bert = BertModel.from_pretrained('bert-base-chinese').to(device)
-
-    # 读取CSV文件
-    print("正在加载数据……")
-    loaded_data = pd.read_csv('../data/selected_book_top_1200_data_tag.csv')
-    loaded_data['Tags'] = loaded_data['Tags'].apply(lambda x: ast.literal_eval(x) if pd.notna(x) else [])
-
-    # 检查是否已有标签嵌入
-    try:
-        tag_embedding_dict = load_existing_tag_embeddings('data/tag_embedding_dict.pkl')
-        print("加载已存在的标签嵌入。")
-    except FileNotFoundError:
-        print("未找到标签嵌入文件，开始生成标签嵌入。")
-        tag_embedding_dict = load_tag_embeddings(loaded_data, tokenizer, model_bert, device)
-
-    # 准备数据加载器
-    train_dataloader, test_dataloader, num_users, num_books = prepare_dataloaders(
-        csv_path='../data/book_score.csv',
-        tag_embedding_dict=tag_embedding_dict,
-        test_size=0.5,
-        batch_size=4096
-    )
-
-    # 定义模型
-    embedding_dim, hidden_state = 32, 768
-    model = MatrixFactorization(num_users, num_books, embedding_dim, hidden_state).to(device)
-    criterion = nn.MSELoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
     # 定义超参数
     hyperparams = {
-        'embedding_dim': embedding_dim,
-        'hidden_state': hidden_state,
+        'use_tags': False,
+        'embedding_dim': 32,
+        'hidden_state': 768,
         'criterion': 'MSELoss',
         'optimizer': 'Adam',
         'learning_rate': 0.01,
@@ -73,9 +40,54 @@ def main():
         'test_size': 0.5
     }
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f'使用设备: {device}')
+
+    # 读取CSV文件
+    print("正在加载数据……")
+    loaded_data = pd.read_csv('../data/selected_book_top_1200_data_tag.csv')
+    loaded_data['Tags'] = loaded_data['Tags'].apply(lambda x: ast.literal_eval(x) if pd.notna(x) else [])
+
+
+    if(hyperparams['use_tags']):
+        # 初始化BERT模型和分词器
+        print("使用标签嵌入。正在加载BERT模型和分词器……")
+        tokenizer = BertTokenizer.from_pretrained('bert-base-chinese')
+        model_bert = BertModel.from_pretrained('bert-base-chinese').to(device)
+
+        # 检查是否已有标签嵌入
+        try:
+            tag_embedding_dict = load_existing_tag_embeddings('data/tag_embedding_dict.pkl')
+            print("加载已存在的标签嵌入。")
+        except FileNotFoundError:
+            print("未找到标签嵌入文件，开始生成标签嵌入。")
+            tag_embedding_dict = load_tag_embeddings(loaded_data, tokenizer, model_bert, device)
+    else:
+        tag_embedding_dict = None
+        print("不使用标签嵌入。")
+
+    # 准备数据加载器
+    train_dataloader, test_dataloader, num_users, num_books = prepare_dataloaders(
+        csv_path='../data/book_score.csv',
+        tag_embedding_dict=tag_embedding_dict,
+        test_size=hyperparams['test_size'],
+        batch_size=hyperparams['batch_size'],
+        tag_embedding_dim=hyperparams['hidden_state']
+    )
+
+    # 定义模型
+    model = MatrixFactorization(
+        num_users, 
+        num_books, 
+        hyperparams['embedding_dim'], 
+        hyperparams['hidden_state'],
+        hyperparams['use_tags']
+    ).to(device)
+    criterion = nn.MSELoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+
     # 生成时间戳
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-
     # 创建保存模型和超参数的目录
     model_dir = os.path.join('model', f'training_{timestamp}')
     os.makedirs(model_dir, exist_ok=True)

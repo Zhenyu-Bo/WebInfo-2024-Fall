@@ -20,7 +20,12 @@ def train_model(model, train_dataloader, test_dataloader, criterion, optimizer, 
         for idx, (user_ids, book_ids, ratings, tag_embedding) in tqdm(enumerate(train_dataloader), total=len(train_dataloader), desc=f'Epoch {epoch+1}'):
             optimizer.zero_grad()
             
-            predictions = model(user_ids.to(device), book_ids.to(device), tag_embedding.squeeze(1).to(device))
+            predictions = model(
+                user_ids.to(device), 
+                book_ids.to(device), 
+                tag_embedding.to(device)
+            )
+            
             loss = criterion(predictions, ratings.to(device)) + lambda_u * model.user_embeddings.weight.norm(2) + lambda_b * model.book_embeddings.weight.norm(2)
             
             loss.backward()

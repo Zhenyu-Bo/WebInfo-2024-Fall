@@ -11,11 +11,12 @@ import ast
 from transformers import BertTokenizer, BertModel
 
 class BookRatingDataset(Dataset):
-    def __init__(self, data, user_to_idx, book_to_idx, tag_embedding_dict):
+    def __init__(self, data, user_to_idx, book_to_idx, tag_embedding_dict, tag_embedding_dim=768):
         self.data = data
         self.user_to_idx = user_to_idx
         self.book_to_idx = book_to_idx
         self.tag_embedding_dict = tag_embedding_dict
+        self.tag_embedding_dim = tag_embedding_dim
 
     def __len__(self):
         return len(self.data)
@@ -25,7 +26,13 @@ class BookRatingDataset(Dataset):
         user = self.user_to_idx[row['User']]
         book = self.book_to_idx[row['Book']]
         rating = row['Rate'].astype('float32')
-        text_embedding = self.tag_embedding_dict.get(row['Book'])
+        
+        if self.tag_embedding_dict is not None:
+            text_embedding = self.tag_embedding_dict.get(row['Book'])
+        else:
+            # 不使用标签嵌入，返回全零张量
+            text_embedding = torch.zeros(self.tag_embedding_dim)
+
         return user, book, rating, text_embedding
 
 def create_id_mapping(id_list):
@@ -65,7 +72,7 @@ def load_existing_tag_embeddings(load_path='data/tag_embedding_dict.pkl'):
         tag_embedding_dict = pickle.load(f)
     return tag_embedding_dict
 
-def prepare_dataloaders(csv_path, tag_embedding_dict, test_size=0.5, batch_size=4096):
+def prepare_dataloaders(csv_path, tag_embedding_dict, test_size=0.5, batch_size=4096, tag_embedding_dim=768):
     loaded_data = pd.read_csv(csv_path)
 
     user_ids = loaded_data['User'].unique()
@@ -78,8 +85,8 @@ def prepare_dataloaders(csv_path, tag_embedding_dict, test_size=0.5, batch_size=
     train_data, test_data = train_test_split(loaded_data, test_size=test_size, random_state=42)
 
     # 创建训练集和测试集的数据集对象
-    train_dataset = BookRatingDataset(train_data, user_to_idx, book_to_idx, tag_embedding_dict)
-    test_dataset = BookRatingDataset(test_data, user_to_idx, book_to_idx, tag_embedding_dict)
+    train_dataset = BookRatingDataset(train_data, user_to_idx, book_to_idx, tag_embedding_dict, tag_embedding_dim)
+    test_dataset = BookRatingDataset(test_data, user_to_idx, book_to_idx, tag_embedding_dict, tag_embedding_dim)
 
     # 创建训练集和测试集的数据加载器
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)

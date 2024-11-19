@@ -1,5 +1,5 @@
 {
-    "use_tags": true,
+    "use_tags": false,
     "embedding_dim": 32,
     "hidden_state": 768,
     "criterion": "MSELoss",
@@ -10,7 +10,7 @@
     "lambda_b": 0.001,
     "batch_size": 4096,
     "test_size": 0.5,
-    "final_train_loss": 2.1475930430672387,
-    "final_test_loss": 2.8761893123775333,
-    "final_ndcg": 0.6945034180861936
+    "final_train_loss": 1.834889588417945,
+    "final_test_loss": 3.0692807792069075,
+    "final_ndcg": 0.6973156406472125
 }

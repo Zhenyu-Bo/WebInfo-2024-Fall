@@ -713,114 +713,536 @@ if token not in operators:
 
 ### stage2
 
-#### 参数说明
-在助教给定的示例代码中，指定了初始超参数，下面结合这些超参数的初始值，对这些参数进行详细的说明
-助教给定的模型超参数如下所示：
+#### 模块化代码并优化
 
-1. **嵌入维度（embedding_dim）**
-- **值**：32
-- **说明**：
-  - 定义了用户和物品（书籍）的嵌入向量的维度。
-  - 较低的嵌入维度可以减少模型的计算量和内存占用，但可能限制模型捕捉复杂特征的能力。
-  - **选择理由**：32 是一个较为常见的嵌入维度，平衡了模型复杂度与性能。
+在本次实验中，我们首先将助教提供的 Jupyter Notebook 文件（`.ipynb`）进行了模块化改写，将其拆分为多个 Python 文件（`.py`），以提高代码的可读性和可维护性。
 
-1. **隐藏状态维度（hidden_state）**
-- **值**：768
-- **说明**：
-  - 定义了从 BERT 模型中提取的标签嵌入向量的维度。
-  - BERT 基础模型的隐藏状态维度通常为 768。
-  - **选择理由**：与预训练的 BERT 模型保持一致，以确保特征表示的充分性。
+在助教给定的代码逻辑的基础上，我们首先修正了一个问题：
 
-1. **损失函数（criterion）**
-- **值**：均方误差损失 (nn.MSELoss)
-- **说明**：
-  - 衡量模型预测评分与真实评分之间差异的指标。
-  - MSE 通过计算预测值与真实值差的平方来量化误差。
-  - **选择理由**：在回归任务中，MSE 是一种常用且有效的损失函数，适用于评分预测问题。
+- 在解析tag文件中的Tags时，参考实现代码直接使用了`tags_str = " ".join(rows.Tags)`，这时`rows.Tags`还是形如`"{"信息",“应用”}"`这样的表示集合的一整段字符串，作用`" ".join()`后只会生成`"{ " 信 息 " , “ 应 用 ” }"`这样的字符串，显然不符合我们想要**“将`tag_str`转化为一段用空格分隔标签的字符串”**的预期。于是我们在`main.py`中添加了下面一行代码作数据的预处理：
 
-1. **优化器（optimizer）**
-- **值**：Adam 优化器 (torch.optim.Adam) 
-- **学习率（lr）**：0.01
-- **说明**：
-  - Adam 是一种自适应学习率优化算法，结合了动量和 RMSProp 的优点，能够在大多数情况下表现良好。
-  - 学习率决定了每次参数更新的步长，较高的学习率可以加快收敛速度，但可能导致不稳定。
-  - **选择理由**：Adam 优化器在各种深度学习任务中表现优异，较高的学习率（0.01）用于加速训练过程。
+  ```python
+  loaded_data['Tags'] = loaded_data['Tags'].apply(lambda x: ast.literal_eval(x) if pd.notna(x) else [])
+  ```
 
-1. **正则化系数**
-- **用户嵌入正则化（lambda_u）**：0.001
-- **物品嵌入正则化（lambda_b）**：0.001
-- **说明**：
-  - 用于控制模型的过拟合，防止嵌入向量过大。
-  - 正则化项通过惩罚权重的大小，促使模型保持简洁。
-  - **选择理由**：较小的正则化系数平衡了模型的拟合能力与泛化能力，避免过度约束模型。
+此外，增加了以下基本功能，使得使用更舒适：
 
-1. **训练轮次（num_epochs）**
-- **值**：20
-- **说明**：
-  - 定义模型在整个训练集上迭代的次数。
-  - 轮次数量影响模型的收敛程度和训练时间。
-  - **选择理由**：20 轮通常足够让模型在大多数数据集上逐步收敛，同时避免过长的训练时间。
+- 保存每一次训练的模型、超参数以及训练损失数值和图表，以便后续对训练逻辑作出调整时，可以直观地对不同方法对应的训练效果进行横向比较。
+- 增加进度条和最终输出训练总时长，使得训练进度可视化
 
-1. **批量大小（batch_size）**
-- **值**：4096
-- **说明**：
-  - 每次训练迭代中处理的数据样本数量。
-  - 较大的批量大小可以加速训练过程，但需要更多的内存。
-  - **选择理由**：4096 是一个较大的批量大小，适用于具有较大内存的 GPU，能够加快数据处理速度。
+以下是各个模块的详细说明：
 
-1. **测试集比例（test_size）**
-- **值**：0.5
-- **说明**：
-  - 划分训练集和测试集的比例，这里将 50% 的数据用于测试。
-  - 影响模型评估的代表性和训练数据的充足性。
-  - **选择理由**：在数据量较大的情况下，50% 的测试集可以提供较为稳定和可靠的评估结果，同时保留足够的训练数据。
+##### 1. 数据准备模块 (`data_preparation.py`)
 
-#### 训练效果
+该模块负责数据加载、预处理和数据集的定义。主要功能包括：
+- 加载 CSV 文件并解析标签数据。
+  - 使用 BERT 模型生成标签嵌入，并将其保存为二进制文件。
+- 创建用户和书籍的 ID 映射。
+- 划分训练集和测试集，并创建相应的数据加载器。
+
+```python
+# data_preparation.py
+
+import torch
+import pickle
+import numpy as np
+import pandas as pd
+from torch.utils.data import Dataset, DataLoader
+from tqdm import tqdm
+from sklearn.model_selection import train_test_split
+import ast
+from transformers import BertTokenizer, BertModel
+
+class BookRatingDataset(Dataset):
+    def __init__(self, data, user_to_idx, book_to_idx, tag_embedding_dict):
+        self.data = data
+        self.user_to_idx = user_to_idx
+        self.book_to_idx = book_to_idx
+        self.tag_embedding_dict = tag_embedding_dict
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, index):
+        row = self.data.iloc[index]
+        user = self.user_to_idx[row['User']]
+        book = self.book_to_idx[row['Book']]
+        rating = row['Rate'].astype('float32')
+        text_embedding = self.tag_embedding_dict.get(row['Book'])
+        return user, book, rating, text_embedding
+
+def create_id_mapping(id_list):
+    unique_ids = sorted(set(id_list))
+    id_to_idx = {id: idx for idx, id in enumerate(unique_ids)}
+    idx_to_id = {idx: id for id, idx in id_to_idx.items()}
+    return id_to_idx, idx_to_id
+
+def load_tag_embeddings(loaded_data, tokenizer, model, device, save_path='data/tag_embedding_dict.pkl'):
+    tag_embedding_dict = {}
+    with torch.no_grad():
+        for index, rows in tqdm(loaded_data.iterrows(), total=loaded_data.shape[0], desc='生成标签嵌入'):
+            tags_str = " ".join(rows.Tags)
+            inputs = tokenizer(tags_str, truncation=True, return_tensors='pt').to(device)
+            outputs = model(**inputs)
+            tag_embedding = outputs.last_hidden_state.mean(dim=1).cpu()
+            tag_embedding_dict[rows.Book] = tag_embedding
+    with open(save_path, 'wb') as f:
+        pickle.dump(tag_embedding_dict, f)
+    return tag_embedding_dict
+
+def load_existing_tag_embeddings(load_path='data/tag_embedding_dict.pkl'):
+    with open(load_path, 'rb') as f:
+        tag_embedding_dict = pickle.load(f)
+    return tag_embedding_dict
+
+def prepare_dataloaders(csv_path, tag_embedding_dict, test_size=0.5, batch_size=4096):
+    loaded_data = pd.read_csv(csv_path)
+    user_ids = loaded_data['User'].unique()
+    book_ids = loaded_data['Book'].unique()
+    user_to_idx, idx_to_user = create_id_mapping(user_ids)
+    book_to_idx, idx_to_book = create_id_mapping(book_ids)
+    train_data, test_data = train_test_split(loaded_data, test_size=test_size, random_state=42)
+    train_dataset = BookRatingDataset(train_data, user_to_idx, book_to_idx, tag_embedding_dict)
+    test_dataset = BookRatingDataset(test_data, user_to_idx, book_to_idx, tag_embedding_dict)
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, drop_last=True)
+    return train_dataloader, test_dataloader, len(user_ids), len(book_ids)
+```
+
+##### 2. 模型定义模块 (`models.py`)
+
+该模块定义了神经网络模型。主要功能包括：
+- 定义矩阵分解模型（`MatrixFactorization`），结合用户嵌入、书籍嵌入和标签嵌入进行评分预测。
+
+```python
+# models.py
+
+import torch
+from torch import nn
+
+class MatrixFactorization(nn.Module):
+    def __init__(self, num_users, num_books, embedding_dim, hidden_state):
+        super(MatrixFactorization, self).__init__()
+        self.user_embeddings = nn.Embedding(num_users, embedding_dim)
+        self.book_embeddings = nn.Embedding(num_books, embedding_dim)
+        self.linear_embedding = nn.Linear(hidden_state, embedding_dim)
+        self.output = nn.Linear(embedding_dim, 6)
+
+    def forward(self, user, book, tag_embedding):
+        user_embedding = self.user_embeddings(user)
+        book_embedding = self.book_embeddings(book)
+        tag_embedding_proj = self.linear_embedding(tag_embedding)
+        book_integrate = book_embedding + tag_embedding_proj
+        return (user_embedding * book_integrate).sum(dim=1)
+```
+
+##### 3. 训练模块 (`train.py`)
+
+该模块包含训练和评估的主循环。主要功能包括：
+- 训练模型，计算训练损失。
+- 在测试集上评估模型，计算测试损失和 NDCG 分数。
+- 记录每个 epoch 的损失值和 NDCG 分数。
+
+```python
+# train.py
+
+import torch
+from tqdm import tqdm
+import numpy as np
+import pandas as pd
+from utils import compute_ndcg
+from sklearn.metrics import ndcg_score
+import os
+
+def train_model(model, train_dataloader, test_dataloader, criterion, optimizer, device, num_epochs=20, lambda_u=0.001, lambda_b=0.001):
+    train_losses = []
+    test_losses = []
+    ndcg_scores_list = []
+
+    for epoch in range(num_epochs):
+        model.train()
+        total_loss_train = 0.0
+
+        for idx, (user_ids, book_ids, ratings, tag_embedding) in tqdm(enumerate(train_dataloader), total=len(train_dataloader), desc=f'Epoch {epoch+1}'):
+            optimizer.zero_grad()
+            predictions = model(user_ids.to(device), book_ids.to(device), tag_embedding.squeeze(1).to(device))
+            loss = criterion(predictions, ratings.to(device)) + lambda_u * model.user_embeddings.weight.norm(2) + lambda_b * model.book_embeddings.weight.norm(2)
+            loss.backward()
+            optimizer.step()
+            total_loss_train += loss.item()
+
+        output_loss_train = total_loss_train / (idx + 1)
+        train_losses.append(output_loss_train)
+        print(f'第{epoch+1}轮，平均训练损失：{output_loss_train}')
+
+        model.eval()
+        total_loss_test = 0.0
+        results = []
+
+        with torch.no_grad():
+            for idx, (user_ids, item_ids, true_ratings, tag_embedding) in tqdm(enumerate(test_dataloader), total=len(test_dataloader), desc=f'Evaluating Epoch {epoch+1}'):
+                pred_ratings = model(user_ids.to(device), item_ids.to(device), tag_embedding.squeeze(1).to(device))
+                loss = criterion(pred_ratings, true_ratings.to(device))
+                total_loss_test += loss.item()
+
+                user_ids_np = user_ids.long().cpu().numpy().reshape(-1, 1)
+                pred_ratings_np = pred_ratings.cpu().numpy().reshape(-1, 1)
+                true_ratings_np = true_ratings.numpy().reshape(-1, 1)
+                batch_results = np.column_stack((user_ids_np, pred_ratings_np, true_ratings_np))
+                results.append(batch_results)
+
+        results = np.vstack(results)
+        results_df = pd.DataFrame(results, columns=['user', 'pred', 'true'])
+        results_df['user'] = results_df['user'].astype(int)
+        ndcg_scores = results_df.groupby('user').apply(compute_ndcg)
+        avg_ndcg = ndcg_scores.mean()
+        test_losses.append(total_loss_test / (idx + 1))
+        ndcg_scores_list.append(avg_ndcg)
+        print(f'第{epoch+1}轮，训练损失：{output_loss_train}, 测试损失：{total_loss_test / (idx + 1)}, 平均NDCG: {avg_ndcg}')
+
+    return train_losses, test_losses, ndcg_scores_list
+```
+
+##### 4. 主脚本 (`main.py`)
+
+该模块负责协调各个模块的调用，执行从数据加载到模型训练的整个流程。主要功能包括：
+- 初始化 BERT 模型和分词器。
+- 加载数据并生成标签嵌入。
+- 准备数据加载器。
+- 定义模型、损失函数和优化器。
+- 训练模型并保存结果。
+- 绘制损失函数和 NDCG 曲线。
+
+```python
+# main.py
+
+import torch
+import pickle
+import numpy as np
+import pandas as pd
+from torch import nn
+from transformers import BertTokenizer, BertModel
+from tqdm import tqdm
+import ast
+import matplotlib.pyplot as plt
+import time
+import json
+from datetime import datetime
+import os
+
+from data_preparation import (
+    load_tag_embeddings,
+    load_existing_tag_embeddings,
+    prepare_dataloaders
+)
+from models import MatrixFactorization
+from train import train_model
+
+def main():
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f'使用设备: {device}')
+
+    print("正在加载BERT模型和分词器……")
+    tokenizer = BertTokenizer.from_pretrained('bert-base-chinese')
+    model_bert = BertModel.from_pretrained('bert-base-chinese').to(device)
+
+    print("正在加载数据……")
+    loaded_data = pd.read_csv('../data/selected_book_top_1200_data_tag.csv')
+    loaded_data['Tags'] = loaded_data['Tags'].apply(lambda x: ast.literal_eval(x) if pd.notna(x) else [])
+
+    try:
+        tag_embedding_dict = load_existing_tag_embeddings('data/tag_embedding_dict.pkl')
+        print("加载已存在的标签嵌入。")
+    except FileNotFoundError:
+        print("未找到标签嵌入文件，开始生成标签嵌入。")
+        tag_embedding_dict = load_tag_embeddings(loaded_data, tokenizer, model_bert, device)
+
+    train_dataloader, test_dataloader, num_users, num_books = prepare_dataloaders(
+        csv_path='../data/book_score.csv',
+        tag_embedding_dict=tag_embedding_dict,
+        test_size=0.5,
+        batch_size=4096
+    )
+
+    embedding_dim, hidden_state = 32, 768
+    model = MatrixFactorization(num_users, num_books, embedding_dim, hidden_state).to(device)
+    criterion = nn.MSELoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+
+    hyperparams = {
+        'embedding_dim': embedding_dim,
+        'hidden_state': hidden_state,
+        'criterion': 'MSELoss',
+        'optimizer': 'Adam',
+        'learning_rate': 0.01,
+        'num_epochs': 20,
+        'lambda_u': 0.001,
+        'lambda_b': 0.001,
+        'batch_size': 4096,
+        'test_size': 0.5
+    }
+
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    model_dir = os.path.join('model', f'training_{timestamp}')
+    os.makedirs(model_dir, exist_ok=True)
+
+    num_epochs = hyperparams['num_epochs']
+    lambda_u, lambda_b = hyperparams['lambda_u'], hyperparams['lambda_b']
+    start_time = time.time()
+    train_losses, test_losses, ndcg_scores_list = train_model(
+        model, 
+        train_dataloader, 
+        test_dataloader, 
+        criterion, 
+        optimizer, 
+        device, 
+        num_epochs, 
+        lambda_u, 
+        lambda_b
+    )
+    end_time = time.time()
+    print(f"训练模型共耗时：{end_time - start_time:.2f}秒。")
+
+    model_filename = f'matrix_factorization_{timestamp}.pth'
+    torch.save(model.state_dict(), os.path.join(model_dir, model_filename))
+    print(f"模型已保存为 {model_filename}。")
+
+    hyperparams.update({
+        'final_train_loss': train_losses[-1],
+        'final_test_loss': test_losses[-1],
+        'final_ndcg': ndcg_scores_list[-1]
+    })
+    config_filename = f'config_{timestamp}.json'
+    with open(os.path.join(model_dir, config_filename), 'w') as f:
+        json.dump(hyperparams, f, indent=4, ensure_ascii=False)
+    print(f"超参数已保存为 {config_filename}。")
+
+    metrics = {
+        'train_losses': train_losses,
+        'test_losses': test_losses,
+        'ndcg_scores': ndcg_scores_list
+    }
+    metrics_filename = f'metrics_{timestamp}.json'
+    with open(os.path.join(model_dir, metrics_filename), 'w') as f:
+        json.dump(metrics, f, indent=4)
+    print(f"损失值和NDCG分数已保存为 {metrics_filename}。")
+
+    plt.rcParams['font.sans-serif'] = ['SimHei']
+    plt.rcParams['axes.unicode_minus'] = False
+
+    epochs = range(1, num_epochs + 1)
+    plt.figure(figsize=(12, 6))
+
+    plt.subplot(1, 2, 1)
+    plt.plot(epochs, train_losses, label='训练损失')
+    plt.plot(epochs, test_losses, label='测试损失')
+    plt.xlabel('轮次')
+    plt.ylabel('损失')
+    plt.title('训练和测试损失')
+    plt.legend()
+
+    plt.subplot(1, 2, 2)
+    plt.plot(epochs, ndcg_scores_list, label='平均NDCG')
+    plt.xlabel('轮次')
+    plt.ylabel('NDCG')
+    plt.title('平均NDCG')
+    plt.legend()
+
+    plt.tight_layout()
+    plot_filename = f'training_curves_{timestamp}.png'
+    plt.savefig(os.path.join(model_dir, plot_filename))
+    plt.show()
+    print(f"损失函数和NDCG曲线已保存为 {plot_filename}。")
+
+if __name__ == '__main__':
+    main()
+```
+
+通过改写，我们实现了代码的模块化和结构化，提高了代码的可读性和可维护性，便于团队协作和代码复用。分离了数据准备、模型定义、训练过程和主脚本的功能，使得整个项目结构更加清晰明了。
+
+
+
+#### 训练过程
 
 ##### 第一次训练
-使用助教给定默认超参数，其损失函数曲线和平均NDCG曲线如图
-![alt text](stage2/img/train1_figure.png)
-最终命令行输出如下
-![alt text](stage2/img/train1_output.png)
 
-**结果分析：**
-对第一次训练的结果，我们结合相关指标进行比较详细的阐释与分析
+###### 1）模型与算法简介
+
+助教给出的代码在传统的矩阵分解基础上引入了标签信息，使用了**将书籍嵌入与其标签嵌入简单相加**的方案，以改进推荐效果。
+
+###### 2）模型结构
+
+1. **用户嵌入（User Embedding）**：将每个用户映射为一个低维嵌入向量，表示为 $\mathbf{P}_u$，其中 $u$ 表示用户索引。
+
+2. **书籍嵌入（Book Embedding）**：将每本书籍映射为一个低维嵌入向量，表示为 $\mathbf{Q}_i$，其中 $i$ 表示书籍索引。
+
+3. **标签嵌入（Tag Embedding）**：
+
+   - 使用预训练的中文 BERT 模型对每本书籍的标签进行编码，得到标签的高维表示 $\mathbf{T}_i$。
+   - 通过线性层将高维的标签嵌入 $\mathbf{T}_i$ 映射到与书籍嵌入相同的低维空间，表示为 $\mathbf{H}_i = \mathbf{W} \mathbf{T}_i + \mathbf{b}$，其中 $\mathbf{W}$ 和 $\mathbf{b}$ 为线性层的参数。
+
+4. **书籍与标签融合（Book and Tag Integration）**：
+
+   - 将映射后的标签嵌入与书籍嵌入相加，得到融合后的书籍表示 $\widetilde{\mathbf{Q}}_i = \mathbf{Q}_i + \mathbf{H}_i$。
+
+5. **评分预测（Rating Prediction）**：
+
+   - 预测用户 $u$ 对书籍 $i$ 的评分 $\hat{r}_{ui}$，通过用户嵌入和融合后的书籍表示的点积计算：
+     $$
+     \hat{r}_{ui} = \mathbf{P}_u^\top \widetilde{\mathbf{Q}}_i = \mathbf{P}_u^\top (\mathbf{Q}_i + \mathbf{H}_i)
+     $$
+
+###### 3）算法流程
+
+1. **数据处理**：
+
+   - 从数据集中提取用户、书籍和对应的评分。
+   - 使用预训练的 BERT 模型对每本书籍的标签进行编码，生成标签嵌入并保存。
+
+2. **模型训练**：
+
+   - **损失函数**：采用均方误差损失函数（MSELoss）计算预测评分与真实评分之间的差异，并加入 L2 正则化项以防止过拟合：
+     $$
+     L = \frac{1}{N} \sum_{(u,i) \in \mathcal{D}} (r_{ui} - \hat{r}_{ui})^2 + \lambda_u \|\mathbf{P}_u\|^2 + \lambda_i \|\mathbf{Q}_i\|^2
+     $$
+     其中，$\mathcal{D}$ 为训练数据集，$\lambda_u$ 和 $\lambda_i$ 为正则化参数。
+
+   - **优化算法**：使用 Adam 优化器更新模型参数。
+
+   - **训练过程**：
+     - 在每个训练批次中，获取用户索引、书籍索引、真实评分和对应的标签嵌入。
+     - 计算用户嵌入、书籍嵌入和标签嵌入，并进行融合。
+     - 预测评分并计算损失。
+     - 反向传播更新模型参数。
+
+3. **模型评估**：
+
+   - 在测试集上计算平均损失和 NDCG 指标，评估模型的预测性能。
+
+###### 4）参数说明
+
+在本次训练中，我们助教给定的初始超参数设置：
+
+- **embedding_dim**：设为 `32`，表示用户和书籍嵌入向量的维度为 32。这是嵌入层的大小，决定了模型能够捕捉到的潜在特征的复杂度。
+- **hidden_state**：设为 `768`，这是预训练的 BERT 模型输出的隐藏层状态维度。使用 BERT 对标签进行编码时，生成的标签嵌入向量维度即为 768。
+- **criterion**：损失函数选择为 `MSELoss`，即均方误差损失，用于衡量模型预测评分与真实评分之间的差异。
+- **optimizer**：优化器选择为 `Adam`，这是一种自适应学习率的优化算法，能够较好地应对稀疏梯度和噪声。
+- **learning_rate**：学习率设置为 `0.01`，控制参数更新的步长，对模型的收敛速度和性能有重要影响。
+- **num_epochs**：训练迭代次数设为 `20`，即模型在整个训练集上训练 20 个周期。
+- **lambda_u** 和 **lambda_b**：正则化系数，均设置为 `0.001`，用于防止模型过拟合，分别作用于用户嵌入和书籍嵌入的 L2 正则化项。
+- **batch_size**：批次大小设为 `4096`，即每次迭代使用 4096 条数据，较大的批次有助于充分利用计算资源，提高训练速度。
+- **test_size**：测试集比例设为 `0.5`，即将数据集按 1:1 的比例划分为训练集和测试集，用于评估模型的泛化性能。
+
+###### 5）训练效果
+
+使用上一步模块化的代码，以及助教给定默认超参数，其损失函数曲线和平均NDCG曲线如图
+
+<img src="stage2/img/train1_figure.png" alt="alt text" style="zoom:67%;" />
+最终命令行输出如下
+<img src="stage2/img/train1_output.png" alt="alt text" style="zoom:67%;" />
+这是第一次训练的结果，我们结合相关指标进行比较详细的阐释与分析
 
 **1. 损失函数（Loss）分析**
 
-- **训练损失（Training Loss）**：
-  - **值**：2.152（第20轮）
-- **测试损失（Test Loss）**：
-  - **值**：2.909（第20轮）
-  
-**解释**：
-- 损失函数使用的是均方误差（MSE），它衡量的是预测评分与真实评分之间的差异。
-- **MSE的大小取决于评分的范围**。如果评分在1到5之间：
-  - 理想情况下，MSE越小越好，表示预测评分与真实评分越接近。
-  - 一个MSE值为2意味着平均上每个预测评分与真实评分之间的平方差是2，这在1到5分的评分范围内偏高，反映出模型的预测误差较大。
+- **训练损失（Training Loss）**：2.152（第20轮）
+- **测试损失（Test Loss）**：2.909（第20轮）
+
+**分析**：
+
+- 评分在0到5之间，一个MSE值为2意味着平均上每个预测评分与真实评分之间的平方差是2，这在1到5分的评分范围内偏高，反映出模型的预测误差较大。
+- 测试损失略高于训练损失，说明模型在训练集上表现稍好，但在测试集上有一定的泛化误差。
 
 **2. 评估指标（NDCG）分析**
 
-- **平均NDCG**：
-  - **值**：0.692（第20轮）
+- **平均NDCG**：0.692（第20轮）
 
-**解释**：
+**分析**：
+
 - **NDCG（Normalized Discounted Cumulative Gain）** 是一种用于评估推荐系统排序质量的指标，范围在0到1之间，值越接近1表示排序质量越高。
 - **0.692的NDCG值** 表示模型在推荐排序方面有一定的能力，但仍有提升空间。
 
-**3. 训练与测试损失对比**
+##### 第二次训练
 
-- **训练损失**：2.152
-- **测试损失**：2.909
+###### 1）模型与算法简介
 
-**解释**：
-- 测试损失略高于训练损失，说明模型在训练集上表现稍好，但在测试集上有一定的泛化误差。
-- **轻微的过拟合**：训练损失和测试损失接近，过拟合现象不明显。
+结合作业要求，我们需要采用协同过滤方式，仅利用用户-项目（电影或书籍）的评分矩阵进行评分预测。第一次训练的模型中，`MatrixFactorization`类同时使用了用户嵌入、书籍嵌入和标签嵌入，这已经引入了文本信息。为了满足仅利用评分矩阵的协同过滤，我们需要修改模型，只使用用户嵌入和书籍嵌入，不包含标签嵌入。这可以帮助我们比较纯协同过滤与引入文本信息的效果差异。
 
-可以适当增加正则化力度，防止过拟合。
+我们增加了一个`bool`类型的超参数`use_tags`，表示是否使用简单标签嵌入，并对代码进行了相应修改，以支持新增的超参数。
 
+###### 2）参数说明
 
+与第一次基本相同，增加了一个超参数
 
+- **use_tags**：`False`。设置为 `True`时，表示在模型训练中使用标签嵌入，设置为`False`时不用。
+
+###### 3）训练效果
+
+将`use_tags`参数设置为 `False`，即**不使用标签嵌入**，仅利用用户-书籍的评分矩阵进行协同过滤训练。其损失函数曲线和平均 NDCG 曲线如下所示：
+
+<img src="stage2/img/train2_figure.png" alt="第二次训练损失和NDCG曲线" style="zoom: 67%;" />
+
+最终命令行输出如下：
+
+<img src="stage2/img/train2_output.png" alt="第二次训练输出" style="zoom:67%;" />
+
+结合相关指标，我们对第二次训练的结果进行详细的阐释与分析。
+
+**1. 损失函数（Loss）分析**
+
+- **训练损失（Training Loss）**：1.835（第 20 轮）
+- **测试损失（Test Loss）**：3.069（第 20 轮）
+
+**分析**：
+
+- **训练损失降低**：
+  - 与第一次训练的训练损失 2.152 相比，降低到了 1.835，表明模型在训练集上的拟合效果有所提升。
+- **测试损失略有增加**：
+  - 测试损失从第一次的 2.909 增加到 3.069，说明模型在测试集上的预测误差有所增大。
+
+**2. 评估指标（NDCG）分析**
+
+- **平均 NDCG**：
+  - **值**：0.697（第 20 轮）
+
+**分析**：
+
+- 平均 NDCG 从第一次训练的 0.692 提升到了 0.697，表明模型在推荐结果的排序质量上有所改善。
+
+**3. 对比分析**
+
+- **训练损失的降低与测试损失的增加**：
+  - 不使用标签嵌入，模型参数减少，可能导致模型更容易在训练集上取得较好的拟合结果，但泛化能力下降，导致测试损失增加。
+- **NDCG 的提升**：
+  - 尽管测试损失增加，但 NDCG 有所提升，说明模型在预测评分的绝对值上误差增大，但在用户感兴趣的物品排序上表现更好。
+
+**4. 改进方向**
+
+- **引入更丰富的特征**：
+  - 尝试引入其他辅助信息，如时间戳、用户或书籍的元数据，增强模型的泛化能力。
+- **优化模型结构**：
+  - 考虑在标签嵌入的融合方式上进行改进，如使用注意力机制或深度神经网络，以更好地利用文本信息。
+
+**5. 对两次训练的整体比较**
+
+| 指标      | 第一次训练（使用标签嵌入） | 第二次训练（不使用标签嵌入） |
+| --------- | -------------------------- | ---------------------------- |
+| 训练损失  | 2.152                      | **1.835**                    |
+| 测试损失  | **2.909**                  | 3.069                        |
+| 平均 NDCG | 0.692                      | **0.697**                    |
+
+- **训练损失**：第二次训练更低，模型在训练集上拟合更好。
+- **测试损失**：第一次训练较低，模型在测试集上表现更好。
+- **平均 NDCG**：第二次训练略高，推荐结果的排序性能更优。
+
+**分析**：
+
+- **复杂模型 vs. 简单模型**：
+  - 使用标签嵌入的模型更复杂，可能在训练数据不足或标签处理不当的情况下，容易引入噪声，影响模型的泛化能力。
+  - 简单的协同过滤模型参数更少，不使用标签嵌入，模型结构更简单，可能更适合捕捉用户与物品之间的直接关联，可能在评分预测上略有不足，但在排序结果上具备优势。
+
+- **标签信息的作用**：
+  - 标签嵌入在一定程度上提供了额外的文本信息，有助于模型理解物品的特征。
+  - 但简单地将标签嵌入与书籍嵌入相加，可能无法充分挖掘文本信息的价值，需要改进融合方式。
 
 
 
