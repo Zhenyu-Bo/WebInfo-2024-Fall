@@ -50,20 +50,15 @@ PB22081571薄震宇	PB22111613王翔辉	PB22020514郭东昊
 
 #### 数据预处理
 
-##### 1. 导入必要的模块
+##### 选择分词工具
 
-```python
-import csv
-import jieba
-import pkuseg
-import ast
-```
+我们选择使用现有的分词工具：`jieba`（结巴分词）和`pkuseg`。
 
-- `csv`：用于读取和写入CSV文件。
-- `jieba`、`pkuseg`：中文分词工具，支持用户选择。
-- `ast`：用于将字符串形式的集合安全地解析为实际的集合对象。
+“结巴” 分词是GitHub 最受欢迎的分词工具，支持多种分词模式，支持精确模式，全模式，搜索引擎模式，支持自定义词典。
 
-##### 2. 选择分词工具
+`pkuseg` 是北大语言计算与机器学习研究组开源的一款分词工具，它的特点是支持多领域分词，目前支持新闻领域，网络领域，医药领域，旅游领域，以及混合领域的分词预训练模型，用户可以自由地选择不同的模型。相比通用分词工具，它的分词准确率更高 。
+
+使用时直接`import jieba`和`import pkuseg`即可。通过下面的代码实现分词工具的选择：
 
 ```python
 # 选择分词工具
@@ -82,7 +77,7 @@ else:
 - 通过命令行输入，用户可选择使用 `jieba` 或 `pkuseg` 进行分词。
 - 默认情况下，若输入有误，则使用 `jieba` 分词。
 
-##### 3. 加载停用词表
+##### 加载停用词表
 
 ```python
 # 加载停用词表
@@ -103,7 +98,7 @@ with open(stopwords_file, 'r', encoding='utf-8') as f:
 - 在分词后的结果中，遍历每个词，检查其是否在 `stopwords` 集合中。
 - 如果在停用词列表中，则过滤掉，不纳入后续处理。
 
-##### 4. 加载同义词词典
+##### 加载同义词词典
 
 ```python
 # 加载同义词词典
@@ -126,7 +121,7 @@ with open(synonyms_file, 'r', encoding='utf-8') as f:
 - 在词语经过停用词过滤后，检查是否在 `synonym_dict` 中。
 - 如果存在同义词映射，则将词替换为对应的代表词。
 
-##### 5. 定义文件列表并初始化分词器
+##### 定义文件列表并初始化分词器
 
 ```python
 # 定义文件列表
@@ -143,7 +138,7 @@ if not use_jieba:
 - 指定需要处理的输入文件和对应的输出文件。
 - 如果用户选择了 `pkuseg`，则初始化相应的分词器实例。
 
-##### 6. 处理文件并进行分词、停用词过滤和同义词替换
+##### 处理文件并进行分词、停用词过滤和同义词替换
 
 ```python
 for file_pair in file_list:
@@ -205,6 +200,69 @@ print("所有文件处理完成！")
   - **同义词替换**：检查 `synonym_dict`，将词替换为对应的代表词。
   - **收集新标签**：将处理后的词语加入 `new_tags` 集合，自动去重。
 - **写入处理结果**：将新的标签集合 `new_tags` 重新格式化为字符串形式，写入输出文件。
+
+##### 解释说明
+
+**实验结果：**
+**我们在代码中插入了一些统计时间和分词结果的代码(代码文件split_test.py)，得到了一些统计数据，以下分析都基于这部分实验结果**
+
+```shell
+root@LAPTOP-Q9CFOCTC ~/w/m/n/W/l/stage1 (main) [1]# python3 split.py                                                       (base) 
+请选择分词工具（输入 'jieba' 或 'pkuseg'）：jieba
+使用 Jieba 分词
+正在处理文件：../data/selected_book_top_1200_data_tag.csv
+Building prefix dict from the default dictionary ...
+Loading model from cache /tmp/jieba.cache
+Loading model cost 0.607 seconds.
+Prefix dict has been built successfully.
+文件 ../data/selected_book_top_1200_data_tag.csv 处理完成，结果已保存到 data/book_output.csv
+分词过程运行时间：3.12 秒
+总词数：319327
+去除的停用词和非法词语数量：71344
+替换的同义词数量：34034
+
+正在处理文件：../data/selected_movie_top_1200_data_tag.csv
+文件 ../data/selected_movie_top_1200_data_tag.csv 处理完成，结果已保存到 data/movie_output.csv
+分词过程运行时间：10.46 秒
+总词数：1318761
+去除的停用词和非法词语数量：322347
+替换的同义词数量：135582
+
+所有文件处理完成！
+
+root@LAPTOP-Q9CFOCTC ~/w/m/n/W/l/stage1 (main)# python3 split.py                                                           (base) 
+请选择分词工具（输入 'jieba' 或 'pkuseg'）：pkuseg
+使用 PKUSeg 分词
+正在处理文件：../data/selected_book_top_1200_data_tag.csv
+文件 ../data/selected_book_top_1200_data_tag.csv 处理完成，结果已保存到 data/book_output.csv
+分词过程运行时间：11.97 秒
+总词数：319431
+去除的停用词和非法词语数量：74024
+替换的同义词数量：37748
+
+正在处理文件：../data/selected_movie_top_1200_data_tag.csv
+文件 ../data/selected_movie_top_1200_data_tag.csv 处理完成，结果已保存到 data/movie_output.csv
+分词过程运行时间：54.53 秒
+总词数：1229071
+去除的停用词和非法词语数量：320200
+替换的同义词数量：143182
+
+所有文件处理完成！
+
+```
+
+
+1. **分词工具选择**：在处理中文文本时，分词是一个重要的预处理步骤。本程序提供了两种中文分词工具的选择：`jieba` 和 `pkuseg`。用户可以根据实际需求选择合适的分词工具。
+
+   最终方案是：使用 `jieba` 分词工具，选择精确模式进行分词，开启 HMM 模型。 原因如下：
+
+   * 经过测试，`jieba` 分词工具在速度和效果上表现优异，适用于大多数中文文本的分词需求。所以推荐使用 `jieba` 分词工具。
+   * jieba支持三种分词模式：精确模式、全模式和搜索引擎模式。其中，精确模式试图将句子最精确地切开，适合文本分析；全模式把句子中所有可以成词的词语都扫描出来，速度非常快，但是不能解决歧义，并产生很多相同词项（这些词项占用大量存储空间并有很多在同义词去除中被删去，故不采用）；搜索引擎模式在精确模式的基础上，对长词再次切分，提高召回率，但速度较慢。
+   * jieba支持**HMM模型**，默认开启。
+
+
+2. **停用词过滤**：使用已有的中文停用词表 `cn_stopwords.txt`，存储于 stage1/data 目录下，对分词结果进行停用词过滤。
+2. 使用已有的中文同义词表 `syno_from_baidu_hanyu.txt`，存储于 stage1/data 目录下，对分词结果进行同义词替换。
 
 #### 建立倒排索引表与优化
 
@@ -459,6 +517,53 @@ def get_next_skip_idx(skip_table, current_idx):
     return -1
 ```
 
+##### 输出
+
+我们选择输出输出符合条件的书籍/电影的id及tag，tag从`selected_book_top_1200_data_tag`和`selected_movie_top_1200_data_tag`中查询得到。下面分别是进行书籍和电影查询的例子：
+
+![search](figs/search1.png)
+
+![search2](figs/search2.png)
+
+##### 查询效率分析
+
+###### 查询耗时
+
+在进行查询时，通过下面的这段代码在查询开始时记录开始时间并在查询完成时计算查询耗时，查询耗时随着查询结果输出。
+
+```python
+expression = input("请输入布尔查询表达式：\n")
+        # 记录查询开始时间
+        start_time = time.time()
+        tokens = tokenize(expression)
+        postfix_tokens = infix_to_postfix(tokens)
+        result_ids = evaluate_postfix(postfix_tokens, inverted_index, all_ids)
+        # 计算查询耗时
+        elapsed_time = time.time() - start_time
+
+        if result_ids:
+            print("查询结果：\n")
+            display_results(result_ids, words_df)
+        else:
+            print("没有符合条件的结果。")
+
+        print(f"查询耗时：{elapsed_time:.16f} 秒。")
+```
+
+然而，尽管我们已经将查询时间的输出精确到了16位小数，在进行查询时却总是输出 0.0000……000s：
+
+![output](figs/0s.png)
+
+从理论上来分析，因为我们已经事先将倒排索引表读取到了字典中，所以可以很快的获得词项的倒排列表，我们设计的查询的量级也至多是10个左右的条件，所以查询可以在极短时间内完成，输出0.0000……000s也是正常的。
+
+###### 不同词项处理顺序的影响
+
+因为我们的查询执行时间都过于短而无法根据结果分析，所以下面从理论上进行分析：
+
+对于一个查询，本质上是处理查询包含的词项对应的倒排表。对于AND连接的查询，需要提取出倒排表的公共项，对于OR连接的查询，则需要合并倒排表，对于NOT查询，则需要获得其倒排表包含的文档ID在所有文档ID集合上对应的补集。
+
+一般来说，先处理文档频率（倒排列表长度）小的，再处理大的是查询的最佳顺序。对于使用AND或OR连接的查询，这样可以在$O(x+y)$的时间内完成查询（x，y是两个词项的倒排列表长度）。对于包含NOT操作的查询，却无法保证可以在$O(x+y)$的时间内完成查询，因为NOT操作获得词项倒排列表的补集，但是一般一个词项的倒排表不会很长，这也就意味着它的补集会很大。
+
 ##### 注意事项
 
 - **跳表的构建**：
@@ -480,7 +585,7 @@ def get_next_skip_idx(skip_table, current_idx):
 
 ##### 将词典视作单一字符串
 
-**压缩：**
+###### **压缩**
 
 这一部分对应的文件为`dictionary_as_a_string.py`。
 
@@ -499,7 +604,7 @@ def get_next_skip_idx(skip_table, current_idx):
 
 这里的指针在实现时用偏移量来表示，也就是说通过`term_ptr`表示相应的词项在字符串文件中的偏移量，`posting_ptr`表示倒排列表在倒排表文件中的偏移量。
 
-**查询一个词项**
+###### **查询一个词项**
 
 这一部分对应的代码也在`dictionary_as_a_string.py`里。
 
@@ -515,7 +620,7 @@ def get_next_skip_idx(skip_table, current_idx):
 
 总的来说，首先通过二分查找定位词项，然后通过词项表文件获得词项对应的倒排表的偏移量，然后可以在倒排表文件中得到倒排表。
 
-**在压缩后的倒排索引表上进行布尔查询：**
+###### **在压缩后的倒排索引表上进行布尔查询**
 
 这一部分对应的文件为`bool_search_on_one_string.py`
 
@@ -537,7 +642,7 @@ if token not in operators:
     stack.append(set(doc_ids))
 ```
 
-**压缩前后存储空间与检索效率的比较：**
+###### **压缩前后存储空间与检索效率的比较**
 
 **存储空间：**
 
@@ -567,7 +672,7 @@ if token not in operators:
 
 ##### 间距代替文档ID+可变长度编码
 
-**压缩：**
+###### **压缩**
 
 这一部分对应的文件为`var_len_compress.py`
 
@@ -617,7 +722,7 @@ def variable_byte_encode(gaps: list[int]) -> bytes:
 
 其中词汇表文件的格式为`word, offset, length`，`offset`和`length`分别表示`word`对应的倒排列表在压缩后的倒排表中偏移量和长度，后面可以使用`offset`和`length`获取`word`对应的压缩后的倒排列表再进行解压缩。
 
-**查找一个词项的倒排列表：**
+###### **查找一个词项的倒排列表**
 
 这一步对应的文件为`var_len_search_one_word.py`
 
@@ -661,7 +766,7 @@ def variable_byte_decode(byte_data: bytes) -> list[int]:
 
 得到的`numbers`即为文档ID间距列表。
 
-**在压缩后的倒排索引表上布尔查询：**
+###### **在压缩后的倒排索引表上布尔查询**
 
 这一部分对应的文件为`var_len_bool_search.py`
 
@@ -683,7 +788,7 @@ if token not in operators:
     stack.append(set(inverted_index))
 ```
 
-**压缩前后的存储空间与检索效率比较：**
+###### **压缩前后的存储空间与检索效率比较**
 
 **存储空间：**
 

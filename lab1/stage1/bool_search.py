@@ -148,7 +148,7 @@ def main():
         else:
             print("没有符合条件的结果。")
 
-        print(f"查询耗时：{elapsed_time:.6f} 秒。")
+        print(f"查询耗时：{elapsed_time:.16f} 秒。")
 
         cont = input("是否继续查询？(Y/N): ")
         if cont.strip().lower() != 'y':
