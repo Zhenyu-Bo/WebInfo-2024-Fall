@@ -11,6 +11,9 @@ from tqdm import tqdm
 import ast
 import matplotlib.pyplot as plt
 import time
+import json
+from datetime import datetime
+import os
 
 from data_preparation import (
     load_tag_embeddings,
@@ -31,8 +34,8 @@ def main():
 
     # 读取CSV文件
     print("正在加载数据……")
-    loaded_data = pd.read_csv('..\data\selected_book_top_1200_data_tag.csv')
-    loaded_data['Tags'] = loaded_data['Tags'].apply(lambda x: ast.literal_eval(x))
+    loaded_data = pd.read_csv('../data/selected_book_top_1200_data_tag.csv')
+    loaded_data['Tags'] = loaded_data['Tags'].apply(lambda x: ast.literal_eval(x) if pd.notna(x) else [])
 
     # 检查是否已有标签嵌入
     try:
@@ -56,25 +59,66 @@ def main():
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
+    # 定义超参数
+    hyperparams = {
+        'embedding_dim': embedding_dim,
+        'hidden_state': hidden_state,
+        'criterion': 'MSELoss',
+        'optimizer': 'Adam',
+        'learning_rate': 0.01,
+        'num_epochs': 20,
+        'lambda_u': 0.001,
+        'lambda_b': 0.001,
+        'batch_size': 4096,
+        'test_size': 0.5
+    }
+
+    # 生成时间戳
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+
+    # 创建保存模型和超参数的目录
+    model_dir = os.path.join('model', f'training_{timestamp}')
+    os.makedirs(model_dir, exist_ok=True)
+
     # 训练模型
-    num_epochs = 20
-    lambda_u, lambda_b = 0.001, 0.001
+    num_epochs = hyperparams['num_epochs']
+    lambda_u, lambda_b = hyperparams['lambda_u'], hyperparams['lambda_b']
     start_time = time.time()
-    train_losses, test_losses, ndcg_scores_list = train_model(model, train_dataloader, test_dataloader, criterion, optimizer, device, num_epochs, lambda_u, lambda_b)
+    train_losses, test_losses, ndcg_scores_list = train_model(
+        model, 
+        train_dataloader, 
+        test_dataloader, 
+        criterion, 
+        optimizer, 
+        device, 
+        num_epochs, 
+        lambda_u, 
+        lambda_b
+    )
     end_time = time.time()
     print(f"训练模型共耗时：{end_time - start_time:.2f}秒。")
-    
+
     # 保存模型
-    import os
-    os.makedirs('model', exist_ok=True)
-    torch.save(model.state_dict(), './model/matrix_factorization.pth')
-    print("模型已保存。")
+    model_filename = f'matrix_factorization_{timestamp}.pth'
+    torch.save(model.state_dict(), os.path.join(model_dir, model_filename))
+    print(f"模型已保存为 {model_filename}。")
+
+    # 保存超参数和最后一轮的损失值及NDCG
+    hyperparams.update({
+        'final_train_loss': train_losses[-1],
+        'final_test_loss': test_losses[-1],
+        'final_ndcg': ndcg_scores_list[-1]
+    })
+    config_filename = f'config_{timestamp}.json'
+    with open(os.path.join(model_dir, config_filename), 'w') as f:
+        json.dump(hyperparams, f, indent=4, ensure_ascii=False)
+    print(f"超参数已保存为 {config_filename}。")
 
     # 设置中文字体和解决负号显示问题
     plt.rcParams['font.sans-serif'] = ['SimHei']   # 设置中文字体为黑体
     plt.rcParams['axes.unicode_minus'] = False     # 解决坐标轴负号显示问题
 
-    # 绘制损失函数曲线
+    # 绘制损失函数和NDCG曲线
     epochs = range(1, num_epochs + 1)
     plt.figure(figsize=(12, 6))
 
@@ -94,7 +138,9 @@ def main():
     plt.legend()
 
     plt.tight_layout()
+    plt.savefig(os.path.join(model_dir, 'training_curves.png'))
     plt.show()
+    print(f"损失函数和NDCG曲线已保存为 {os.path.join(model_dir, 'training_curves.png')}。")
 
 if __name__ == '__main__':
-    main()
+        main()
