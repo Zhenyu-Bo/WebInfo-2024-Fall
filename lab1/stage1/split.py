@@ -74,8 +74,8 @@ with open(synonyms_file, 'r', encoding='utf-8') as f:
 
 # 定义文件列表
 file_list = [
-    {'input': '../data/selected_book_top_1200_data_tag.csv', 'output': 'data/book_output.csv'},
-    {'input': '../data/selected_movie_top_1200_data_tag.csv', 'output': 'data/movie_output.csv'}
+    {'input': '../data/selected_book_top_1200_data_tag.csv', 'output': 'data/book_words.csv'},
+    {'input': '../data/selected_movie_top_1200_data_tag.csv', 'output': 'data/movie_words.csv'}
 ]
 
 # 初始化 pkuseg 分词器

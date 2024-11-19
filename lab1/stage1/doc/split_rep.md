@@ -155,3 +155,77 @@ print("所有文件处理完成！")
   - **收集新标签**：将处理后的词语加入 `new_tags` 集合，自动去重。
 - **写入处理结果**：将新的标签集合 `new_tags` 重新格式化为字符串形式，写入输出文件。
 
+#### 7.解释说明
+
+**实验结果：**
+**我们在代码中插入了一些统计时间和分词结果的代码(代码文件split_test.py)，得到了一些统计数据，以下分析都基于这部分实验结果**
+
+```shell
+root@LAPTOP-Q9CFOCTC ~/w/m/n/W/l/stage1 (main) [1]# python3 split.py                                                       (base) 
+请选择分词工具（输入 'jieba' 或 'pkuseg'）：jieba
+使用 Jieba 分词
+正在处理文件：../data/selected_book_top_1200_data_tag.csv
+Building prefix dict from the default dictionary ...
+Loading model from cache /tmp/jieba.cache
+Loading model cost 0.607 seconds.
+Prefix dict has been built successfully.
+文件 ../data/selected_book_top_1200_data_tag.csv 处理完成，结果已保存到 data/book_output.csv
+分词过程运行时间：3.12 秒
+总词数：319327
+去除的停用词和非法词语数量：71344
+替换的同义词数量：34034
+
+正在处理文件：../data/selected_movie_top_1200_data_tag.csv
+文件 ../data/selected_movie_top_1200_data_tag.csv 处理完成，结果已保存到 data/movie_output.csv
+分词过程运行时间：10.46 秒
+总词数：1318761
+去除的停用词和非法词语数量：322347
+替换的同义词数量：135582
+
+所有文件处理完成！
+
+```
+
+
+```shell
+root@LAPTOP-Q9CFOCTC ~/w/m/n/W/l/stage1 (main)# python3 split.py                                                           (base) 
+请选择分词工具（输入 'jieba' 或 'pkuseg'）：pkuseg
+使用 PKUSeg 分词
+正在处理文件：../data/selected_book_top_1200_data_tag.csv
+文件 ../data/selected_book_top_1200_data_tag.csv 处理完成，结果已保存到 data/book_output.csv
+分词过程运行时间：11.97 秒
+总词数：319431
+去除的停用词和非法词语数量：74024
+替换的同义词数量：37748
+
+正在处理文件：../data/selected_movie_top_1200_data_tag.csv
+文件 ../data/selected_movie_top_1200_data_tag.csv 处理完成，结果已保存到 data/movie_output.csv
+分词过程运行时间：54.53 秒
+总词数：1229071
+去除的停用词和非法词语数量：320200
+替换的同义词数量：143182
+
+所有文件处理完成！
+
+``` 
+
+
+1. **分词工具选择**：在处理中文文本时，分词是一个重要的预处理步骤。本程序提供了两种中文分词工具的选择：`jieba` 和 `pkuseg`。用户可以根据实际需求选择合适的分词工具。
+
+最终方案是：使用 `jieba` 分词工具，选择精确模式进行分词，开启 HMM 模型。 原因如下：
+
+- 经过测试，`jieba` 分词工具在速度和效果上表现优异，适用于大多数中文文本的分词需求。所以推荐使用 `jieba` 分词工具。
+
+- jieba支持三种分词模式：精确模式、全模式和搜索引擎模式。其中，精确模式试图将句子最精确地切开，适合文本分析；全模式把句子中所有可以成词的词语都扫描出来，速度非常快，但是不能解决歧义，并产生很多相同词项（这些词项占用大量存储空间并有很多在同义词去除中被删去，故不采用）；搜索引擎模式在精确模式的基础上，对长词再次切分，提高召回率，但速度较慢。
+
+- jieba支持**HMM模型**，默认开启。
+
+
+2. **停用词过滤**：
+
+使用已有的中文停用词表 `cn_stopwords.txt`，存储于 stage1/data 目录下，对分词结果进行停用词过滤。
+
+
+3.**同义词替换** ：
+
+使用已有的中文同义词表 `syno_from_baidu_hanyu.txt`，存储于 stage1/data 目录下，对分词结果进行同义词替换。
