@@ -21,7 +21,7 @@ def train_model(model, train_dataloader, test_dataloader, criterion, optimizer, 
         model.train()
         total_loss_train = 0.0
 
-        for idx, (user_ids, book_ids, ratings, tag_embedding, time_features) in tqdm(
+        for idx, (user_ids, book_ids, ratings, user_tag_embeddings, book_tag_embeddings, time_features) in tqdm(
             enumerate(train_dataloader), 
             total=len(train_dataloader), 
             desc=f'Epoch {epoch+1}'
@@ -31,7 +31,8 @@ def train_model(model, train_dataloader, test_dataloader, criterion, optimizer, 
             predictions = model(
                 user_ids.to(device), 
                 book_ids.to(device), 
-                tag_embedding.to(device),
+                user_tag_embeddings.to(device),
+                book_tag_embeddings.to(device),
                 time_features.to(device)
             )
             
@@ -61,15 +62,16 @@ def train_model(model, train_dataloader, test_dataloader, criterion, optimizer, 
         results = []
 
         with torch.no_grad():
-            for idx, (user_ids, item_ids, true_ratings, tag_embeddings, time_features) in tqdm(
+            for idx, (user_ids, book_ids, true_ratings, user_tag_embeddings, book_tag_embeddings, time_features) in tqdm(
                 enumerate(test_dataloader), 
                 total=len(test_dataloader), 
                 desc=f'Evaluating Epoch {epoch+1}'
             ):
                 pred_ratings = model(
                     user_ids.to(device), 
-                    item_ids.to(device), 
-                    tag_embeddings.to(device),
+                    book_ids.to(device), 
+                    user_tag_embeddings.to(device),
+                    book_tag_embeddings.to(device),
                     time_features.to(device)
                 )
 

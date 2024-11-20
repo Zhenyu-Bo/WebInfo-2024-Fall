@@ -1,0 +1,22 @@
+{
+    "use_tags": true,
+    "embedding_dim": 32,
+    "user_tag_embedding_dim": 100,
+    "book_tag_embedding_dim": 100,
+    "criterion": "MSELoss",
+    "optimizer": "Adam",
+    "learning_rate": 0.01,
+    "num_epochs": 30,
+    "lambda_u": 0.001,
+    "lambda_b": 0.001,
+    "lambda_time": 0.001,
+    "lambda_output": 0.001,
+    "dropout_rate": 0.5,
+    "patience": 5,
+    "batch_size": 4096,
+    "test_size": 0.5,
+    "embedding_method": "tfidf",
+    "final_train_loss": 2.29904766516252,
+    "final_test_loss": 2.054631301334926,
+    "final_ndcg": 0.7478286033437395
+}

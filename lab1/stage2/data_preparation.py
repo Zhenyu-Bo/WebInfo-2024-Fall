@@ -7,16 +7,22 @@ import pandas as pd
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 from sklearn.model_selection import train_test_split
-import ast
+from sklearn.feature_extraction.text import TfidfVectorizer
+from gensim.models import Word2Vec
 from transformers import BertTokenizer, BertModel
+import ast
+import os
 
 class BookRatingDataset(Dataset):
-    def __init__(self, data, user_to_idx, book_to_idx, tag_embedding_dict, tag_embedding_dim=768):
+    def __init__(self, data, user_to_idx, book_to_idx, user_tag_embedding_dict, book_tag_embedding_dict, 
+                 user_tag_embedding_dim=768, book_tag_embedding_dim=768):
         self.data = data
         self.user_to_idx = user_to_idx
         self.book_to_idx = book_to_idx
-        self.tag_embedding_dict = tag_embedding_dict
-        self.tag_embedding_dim = tag_embedding_dim
+        self.user_tag_embedding_dict = user_tag_embedding_dict
+        self.book_tag_embedding_dict = book_tag_embedding_dict
+        self.user_tag_embedding_dim = user_tag_embedding_dim
+        self.book_tag_embedding_dim = book_tag_embedding_dim
 
         # 处理时间特征
         self.data['Timestamp'] = pd.to_datetime(self.data['Time'])
@@ -36,89 +42,110 @@ class BookRatingDataset(Dataset):
         book = self.book_to_idx[row['Book']]
         rating = row['Rate'].astype('float32')
         
-        if self.tag_embedding_dict is not None:
-            text_embedding = self.tag_embedding_dict.get(row['Book'])
+        if self.user_tag_embedding_dict is not None:
+            user_tag_embedding = self.user_tag_embedding_dict.get(row['User'], torch.zeros(self.user_tag_embedding_dim))
         else:
-            # 不使用标签嵌入，返回全零张量
-            text_embedding = torch.zeros(self.tag_embedding_dim)
+            user_tag_embedding = torch.zeros(self.user_tag_embedding_dim)
+        
+        if self.book_tag_embedding_dict is not None:
+            book_tag_embedding = self.book_tag_embedding_dict.get(row['Book'], torch.zeros(self.book_tag_embedding_dim))
+        else:
+            book_tag_embedding = torch.zeros(self.book_tag_embedding_dim)
 
         # 获取时间特征
         time_features = torch.tensor([
-            row['Year'] - 2000,  # 从2000年开始
-            row['Month'] - 1,  # 从0开始
-            row['Day']- 1,  # 从0开始
+            row['Year'] - 2000,
+            row['Month'] - 1,
+            row['Day']- 1,
             row['Hour'],
             row['Weekday'],
             row['IsWeekend']
         ], dtype=torch.long)
 
-        return user, book, rating, text_embedding, time_features
+        return user, book, rating, user_tag_embedding, book_tag_embedding, time_features
 
 def create_id_mapping(id_list):
-    # 从ID列表中删除重复项并创建一个排序的列表
     unique_ids = sorted(set(id_list))
-    
-    # 创建将原始ID映射到连续索引的字典
     id_to_idx = {id: idx for idx, id in enumerate(unique_ids)}
-    
-    # 创建将连续索引映射回原始ID的字典
-    idx_to_id = {idx: id for id, idx in id_to_idx.items()}
-    
-    return id_to_idx, idx_to_id
+    return id_to_idx, {idx: id for id, idx in id_to_idx.items()}
 
-def load_tag_embeddings(loaded_data, tokenizer, model, device, save_path='data/tag_embedding_dict.pkl'):
+def load_tag_embeddings(loaded_data, id_column, tag_column, method='tfidf', tokenizer=None, model=None, device=None, save_path=None):
     tag_embedding_dict = {}
+    ids = loaded_data[id_column].unique()
+    id_to_tags = {}  # 用于存储每个ID对应的所有标签
 
-    with torch.no_grad():
-        for index, rows in tqdm(loaded_data.iterrows(), total=loaded_data.shape[0], desc='生成标签嵌入'):
-            # 将标签列表转换为字符串
-            tags_str = " ".join(rows.Tags)
-            # 使用BERT中文模型对标签进行编码
-            inputs = tokenizer(tags_str, truncation=True, return_tensors='pt').to(device)
-            outputs = model(**inputs)
-            # 使用最后一层的平均隐藏状态作为标签的向量表示
-            tag_embedding = outputs.last_hidden_state.mean(dim=1).cpu()
-            tag_embedding_dict[rows.Book] = tag_embedding
+    for id in ids:
+        tags = loaded_data[loaded_data[id_column]==id][tag_column]
+        tags = tags.dropna().tolist()
+        tags_flat = []
+        for tag_list in tags:
+            if isinstance(tag_list, list):
+                tags_flat.extend(tag_list)
+            else:
+                tags_flat.extend(str(tag_list).split(','))
+        id_to_tags[id] = tags_flat
 
-    # 将映射表存储为二进制文件
-    with open(save_path, 'wb') as f:
-        pickle.dump(tag_embedding_dict, f)
-    
+    if method == 'tfidf':
+        all_tags = [' '.join(tags) for tags in id_to_tags.values()]
+        vectorizer = TfidfVectorizer(max_features=100)
+        tfidf_matrix = vectorizer.fit_transform(all_tags)
+        for idx, id in enumerate(ids):
+            tag_embedding = torch.tensor(tfidf_matrix[idx].toarray()[0], dtype=torch.float)
+            tag_embedding_dict[id] = tag_embedding
+    elif method == 'word2vec':
+        sentences = list(id_to_tags.values())
+        model_w2v = Word2Vec(sentences, vector_size=100, window=5, min_count=1, workers=4)
+        for id in ids:
+            vectors = [torch.tensor(model_w2v.wv[word], dtype=torch.float) for word in id_to_tags[id] if word in model_w2v.wv]
+            if vectors:
+                tag_embedding = torch.mean(torch.stack(vectors), dim=0)
+            else:
+                tag_embedding = torch.zeros(100)
+            tag_embedding_dict[id] = tag_embedding
+    elif method == 'bert':
+        with torch.no_grad():
+            for id in tqdm(ids, desc=f'生成{tag_column}嵌入'):
+                tags_str = " ".join(id_to_tags[id])
+                inputs = tokenizer(tags_str, truncation=True, return_tensors='pt').to(device)
+                outputs = model(**inputs)
+                tag_embedding = outputs.last_hidden_state.mean(dim=1).squeeze().cpu()
+                tag_embedding_dict[id] = tag_embedding
+    if save_path:
+        with open(save_path, 'wb') as f:
+            pickle.dump(tag_embedding_dict, f)
     return tag_embedding_dict
 
-def load_existing_tag_embeddings(load_path='data/tag_embedding_dict.pkl'):
+def load_existing_tag_embeddings(load_path):
     with open(load_path, 'rb') as f:
-        tag_embedding_dict = pickle.load(f)
-    return tag_embedding_dict
+        return pickle.load(f)
 
-def prepare_dataloaders(csv_path, tag_embedding_dict, test_size=0.5, batch_size=4096, tag_embedding_dim=768):
-    loaded_data = pd.read_csv(csv_path)
+def prepare_dataloaders(user_data_path, book_data_path, user_tag_embedding_dict, book_tag_embedding_dict, test_size=0.5, batch_size=4096, 
+                        user_tag_embedding_dim=768, book_tag_embedding_dim=768):
+    loaded_data = pd.read_csv(user_data_path)
+    loaded_data['Tag'] = loaded_data['Tag'].fillna('')
+    loaded_data['Tag'] = loaded_data['Tag'].apply(lambda x: x.split(','))
 
-    user_ids = loaded_data['User'].unique()
-    book_ids = loaded_data['Book'].unique()
+    user_to_idx, idx_to_user = create_id_mapping(loaded_data['User'])
+    book_to_idx, idx_to_book = create_id_mapping(loaded_data['Book'])
 
-    user_to_idx, idx_to_user = create_id_mapping(user_ids)
-    book_to_idx, idx_to_book = create_id_mapping(book_ids)
-
-    # 划分训练集和测试集
     train_data, test_data = train_test_split(loaded_data, test_size=test_size, random_state=42)
 
-    # 创建训练集和测试集的数据集对象
-    train_dataset = BookRatingDataset(train_data, user_to_idx, book_to_idx, tag_embedding_dict, tag_embedding_dim)
-    test_dataset = BookRatingDataset(test_data, user_to_idx, book_to_idx, tag_embedding_dict, tag_embedding_dim)
+    train_dataset = BookRatingDataset(train_data, user_to_idx, book_to_idx, user_tag_embedding_dict, book_tag_embedding_dict, 
+                                      user_tag_embedding_dim, book_tag_embedding_dim)
+    test_dataset = BookRatingDataset(test_data, user_to_idx, book_to_idx, user_tag_embedding_dict, book_tag_embedding_dict, 
+                                     user_tag_embedding_dim, book_tag_embedding_dim)
 
-        # 自定义 collate_fn
     def collate_fn(batch):
-        users, books, ratings, tag_embeddings, time_features = zip(*batch)
+        users, books, ratings, user_tag_embeddings, book_tag_embeddings, time_features = zip(*batch)
         users = torch.tensor(users, dtype=torch.long)
         books = torch.tensor(books, dtype=torch.long)
         ratings = torch.tensor(ratings, dtype=torch.float32)
-        tag_embeddings = torch.stack(tag_embeddings)
+        user_tag_embeddings = torch.stack(user_tag_embeddings)
+        book_tag_embeddings = torch.stack(book_tag_embeddings)
         time_features = torch.stack(time_features)
-        return users, books, ratings, tag_embeddings, time_features
+        return users, books, ratings, user_tag_embeddings, book_tag_embeddings, time_features
 
-    # 创建数据加载器
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, collate_fn=collate_fn)
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, drop_last=True, collate_fn=collate_fn)
 
-    return train_dataloader, test_dataloader, len(user_ids), len(book_ids)
+    return train_dataloader, test_dataloader, len(user_to_idx), len(book_to_idx)
