@@ -8,7 +8,7 @@
 
 import pandas as pd
 import time
-from var_len_decompress import get_inverted_index_list
+from var_len_search_one_word import get_inverted_index_list
 from bool_search import read_all_ids, tokenize, infix_to_postfix, display_results
 
 
@@ -79,7 +79,7 @@ def main():
         else:
             print("没有符合条件的结果。")
 
-        print(f"查询耗时：{elapsed_time:.6f} 秒")
+        print(f"查询耗时：{elapsed_time:.16f} 秒")
 
         cont = input("是否继续查询？(Y/N): ")
         if cont.strip().lower() != 'y':
