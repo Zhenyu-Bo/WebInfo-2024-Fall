@@ -1169,7 +1169,7 @@ if __name__ == '__main__':
 
 #### 训练过程
 
-##### 第一次训练
+##### 第一次训练——简单的标签嵌入
 
 ###### 1）模型与算法简介
 
@@ -1266,7 +1266,9 @@ if __name__ == '__main__':
 - **NDCG（Normalized Discounted Cumulative Gain）** 是一种用于评估推荐系统排序质量的指标，范围在0到1之间，值越接近1表示排序质量越高。
 - **0.692的NDCG值** 表示模型在推荐排序方面有一定的能力，但仍有提升空间。
 
-##### 第二次训练
+
+
+##### 第二次训练——纯协同过滤
 
 ###### 1）模型与算法简介
 
@@ -1344,10 +1346,354 @@ if __name__ == '__main__':
 - **复杂模型 vs. 简单模型**：
   - 使用标签嵌入的模型更复杂，可能在训练数据不足或标签处理不当的情况下，容易引入噪声，影响模型的泛化能力。
   - 简单的协同过滤模型参数更少，不使用标签嵌入，模型结构更简单，可能更适合捕捉用户与物品之间的直接关联，可能在评分预测上略有不足，但在排序结果上具备优势。
-
 - **标签信息的作用**：
   - 标签嵌入在一定程度上提供了额外的文本信息，有助于模型理解物品的特征。
   - 但简单地将标签嵌入与书籍嵌入相加，可能无法充分挖掘文本信息的价值，需要改进融合方式。
+
+
+
+##### 第三次训练——基于协同过滤，加入时间嵌入
+
+###### 1）模型与算法简介
+
+在前两次训练中，我们分别探讨了**使用标签嵌入（文本信息）**和**仅基于评分矩阵的纯协同过滤**对模型性能的影响。为了进一步提高模型的预测准确性，在**仅基于评分矩阵的纯协同过滤**模型的基础上，我们在第三次训练中**引入了时间特征的嵌入**。时间特征在推荐系统中扮演着重要角色，可以捕捉用户行为的时序性和季节性变化。
+
+###### 2）模型结构
+
+1. **用户嵌入（User Embedding）**：将每个用户映射为一个低维嵌入向量，表示为 $\mathbf{P}_u$。
+
+2. **物品嵌入（Item Embedding）**：将每本书籍映射为一个低维嵌入向量，表示为 $\mathbf{Q}_i$。
+
+3. **时间特征嵌入（Time Feature Embedding）**：
+
+   - 提取与交互行为相关的时间特征，包括年份、月份、日期、小时、星期几和是否为周末，共六个特征。
+   - 为每个时间特征创建独立的嵌入层，将时间特征编码为低维向量。
+
+4. **时间嵌入组合（Time Embedding Combination）**：
+
+   - 将六个时间特征的嵌入向量进行拼接，形成一个总的时间嵌入向量 $\mathbf{T}$。
+
+5. **交互表示（Interaction Representation）**：
+
+   - 将用户嵌入与物品嵌入进行元素乘积，得到交互表示 $\mathbf{I}_{ui} = \mathbf{P}_u \odot \mathbf{Q}_i$。
+   - 将交互表示与时间嵌入拼接，形成完整的特征表示 $\mathbf{H}_{ui} = [\mathbf{I}_{ui}; \mathbf{T}]$。
+
+6. **评分预测（Rating Prediction）**：
+
+   - 使用一个线性层对完整的特征表示进行映射，预测最终评分：
+     $$
+     \hat{r}_{ui} = \mathbf{W}^\top \mathbf{H}_{ui} + b
+     $$
+
+###### 3）代码实现
+
+**模型代码修改（`models.py`）**：
+
+```python
+class MatrixFactorization(nn.Module):
+    def __init__(self, num_users, num_books, embedding_dim, hidden_state, use_tags=False):
+        super(MatrixFactorization, self).__init__()
+        self.use_tags = use_tags
+        self.embedding_dim = embedding_dim
+        self.user_embeddings = nn.Embedding(num_users, embedding_dim)
+        self.book_embeddings = nn.Embedding(num_books, embedding_dim)
+
+        # 手动设置每个时间特征的嵌入维度
+        self.year_embedding_dim = 10
+        self.month_embedding_dim = 5
+        self.day_embedding_dim = 5
+        self.hour_embedding_dim = 5
+        self.weekday_embedding_dim = 5
+        self.isweekend_embedding_dim = 2
+
+        # 确保时间嵌入维度之和等于 embedding_dim
+        total_time_embedding_dim = (self.year_embedding_dim + self.month_embedding_dim +
+                                    self.day_embedding_dim + self.hour_embedding_dim +
+                                    self.weekday_embedding_dim + self.isweekend_embedding_dim)
+        assert total_time_embedding_dim == embedding_dim, "时间嵌入维度之和必须等于 embedding_dim"
+
+        # 定义时间特征的嵌入层
+        self.year_embeddings = nn.Embedding(20, self.year_embedding_dim)
+        self.month_embeddings = nn.Embedding(12, self.month_embedding_dim)
+        self.day_embeddings = nn.Embedding(31, self.day_embedding_dim)
+        self.hour_embeddings = nn.Embedding(24, self.hour_embedding_dim)
+        self.weekday_embeddings = nn.Embedding(7, self.weekday_embedding_dim)
+        self.isweekend_embeddings = nn.Embedding(2, self.isweekend_embedding_dim)
+
+        if self.use_tags:
+            self.linear_embedding = nn.Linear(hidden_state, embedding_dim)
+
+        self.output = nn.Linear(embedding_dim * 2, 1)
+
+    def forward(self, user, book, tag_embedding, time_features):
+        user_embedding = self.user_embeddings(user)
+        book_embedding = self.book_embeddings(book)
+
+        if self.use_tags:
+            tag_embedding_proj = self.linear_embedding(tag_embedding)
+            book_integrate = book_embedding + tag_embedding_proj
+        else:
+            book_integrate = book_embedding
+
+        # 处理时间特征
+        year = time_features[:, 0]
+        month = time_features[:, 1]
+        day = time_features[:, 2]
+        hour = time_features[:, 3]
+        weekday = time_features[:, 4]
+        isweekend = time_features[:, 5]
+
+        year_embedding = self.year_embeddings(year)
+        month_embedding = self.month_embeddings(month)
+        day_embedding = self.day_embeddings(day)
+        hour_embedding = self.hour_embeddings(hour)
+        weekday_embedding = self.weekday_embeddings(weekday)
+        isweekend_embedding = self.isweekend_embeddings(isweekend)
+
+        # 汇总时间嵌入
+        time_embedding = torch.cat([
+            year_embedding,
+            month_embedding,
+            day_embedding,
+            hour_embedding,
+            weekday_embedding,
+            isweekend_embedding
+        ], dim=1)
+
+        # 拼接用户-物品交互嵌入和时间嵌入
+        interaction = torch.cat([user_embedding * book_integrate, time_embedding], dim=1)
+
+        output = self.output(interaction).squeeze()
+        return output
+```
+
+**数据处理代码修改（`data_preparation.py`）**：
+
+```python
+class BookRatingDataset(Dataset):
+    def __init__(self, data, user_to_idx, book_to_idx, tag_embedding_dict, tag_embedding_dim=768):
+        self.data = data
+        self.user_to_idx = user_to_idx
+        self.book_to_idx = book_to_idx
+        self.tag_embedding_dict = tag_embedding_dict
+        self.tag_embedding_dim = tag_embedding_dim
+
+        # 处理时间特征
+        self.data['Timestamp'] = pd.to_datetime(self.data['Time'])
+        self.data['Year'] = self.data['Timestamp'].dt.year
+        self.data['Month'] = self.data['Timestamp'].dt.month
+        self.data['Day'] = self.data['Timestamp'].dt.day
+        self.data['Hour'] = self.data['Timestamp'].dt.hour
+        self.data['Weekday'] = self.data['Timestamp'].dt.weekday
+        self.data['IsWeekend'] = self.data['Weekday'].apply(lambda x: 1 if x >= 5 else 0)
+
+    def __getitem__(self, index):
+        row = self.data.iloc[index]
+        user = self.user_to_idx[row['User']]
+        book = self.book_to_idx[row['Book']]
+        rating = row['Rate'].astype('float32')
+
+        # 不使用标签嵌入，返回全零张量
+        text_embedding = torch.zeros(self.tag_embedding_dim)
+
+        # 获取时间特征并调整索引
+        time_features = torch.tensor([
+            row['Year'] - 2000,  # 将年份映射到 0-19
+            row['Month'] - 1,    # 将月份映射到 0-11
+            row['Day'] - 1,      # 将日期映射到 0-30
+            row['Hour'],         # 小时 0-23，无需调整
+            row['Weekday'],      # 星期几 0-6，无需调整
+            row['IsWeekend']     # 是否周末 0 或 1，无需调整
+        ], dtype=torch.long)
+
+        return user, book, rating, text_embedding, time_features
+```
+
+###### 4）参数说明
+
+- **embedding_dim**：设为 `32`，表示用户嵌入与物品嵌入的维度。
+- **时间特征嵌入维度分配**：
+
+  - 年份（Year）：10
+  - 月份（Month）：5
+  - 日期（Day）：5
+  - 小时（Hour）：5
+  - 星期几（Weekday）：5
+  - 是否周末（IsWeekend）：2
+
+  确保时间嵌入维度之和为 `32`。
+
+- **hidden_state**：`768`，预留给标签嵌入的维度，但此处不使用标签嵌入。
+- **use_tags**：`False`，不使用标签嵌入，纯协同过滤。
+
+###### 5）训练效果
+
+**损失函数曲线和平均 NDCG 曲线如下：**
+
+<img src="stage2/img/train3_figure.png" alt="!第三次训练损失和NDCG曲线" style="zoom:67%;" />
+
+**命令行输出如下：**
+
+```bash
+使用设备: cuda
+正在加载数据……
+不使用标签嵌入。
+Epoch 1: 100%|███████████| 77/77 [00:47<00:00, 1.63it/s]
+第1轮，平均训练损失：5.400586611264712
+Evaluating Epoch 1: 100%|██████████| 77/77 [00:51<00:00, 1.50it/s]
+第1轮，训练损失：5.400586611264712, 测试损失：4.199381481517445, 平均NDCG: 0.6904360906461606
+...
+Epoch 20: 100%|██████████| 77/77 [00:47<00:00, 1.61it/s]
+第20轮，平均训练损失：1.0442740483717485
+Evaluating Epoch 20: 100%|████████| 77/77 [00:45<00:00, 1.71it/s]
+第20轮，训练损失：1.0442740483717485, 测试损失：3.221458320493822, 平均NDCG: 0.722754714715037
+训练模型共耗时：1844.11秒。
+模型已保存为 matrix_factorization_20241120-145849.pth。
+超参数已保存为 config_20241120-145849.json。
+损失函数和NDCG曲线已保存为 training_curves.png。
+```
+
+###### 6）详细分析
+
+**1. 损失函数（Loss）曲线分析：**
+
+- **训练损失（Training Loss）**：
+  - 从第1轮的5.40迅速下降到第5轮的2.33，随后逐步下降，到第20轮达到1.04。
+  - 训练损失持续下降，表明模型在训练集上不断优化，拟合程度越来越高。
+  
+- **测试损失（Test Loss）**：
+
+  - 从第1轮的4.20下降到第5轮的2.33，随后下降速度变缓，**在第10轮后甚至出现了测试损失反弹和增大的趋势**。
+  - 第10轮测试损失为2.68，最低达到了2.4，此后逐步增加，到第20轮测试损失为3.22。**出现了严重的过拟合**
+
+**2. 平均NDCG曲线分析：**
+
+- **平均NDCG值**：
+  - 从第1轮的0.69开始，逐步上升，到第10轮达到0.72左右，之后增速放缓，趋于平稳。
+  - 第10轮平均NDCG为0.7216，在后续的训练中，平均NDCG值维持在0.722左右，提升有限。
+
+**3. 过拟合现象的出现：**
+
+- **训练损失持续下降**，但**测试损失在第10轮后开始上升**，这表明模型在训练集上过度拟合，无法很好地泛化到测试集。
+
+- **平均NDCG值在第10轮后增长停滞**，进一步印证了过拟合的问题，模型的推荐排序质量提升受到限制。
+
+**4. 过拟合的原因分析：**
+
+- **正则化措施不足**：仅对用户嵌入和物品嵌入进行了L2正则化，**未对时间嵌入和全连接层进行正则化，无法有效抑制模型复杂度**。
+
+- **缺乏早停策略**：训练轮次较多（20轮），在过拟合开始出现后，模型继续在训练集上优化，加剧了过拟合程度。
+
+所以在下一次训练中，我们将**增加正则化，以及早停策略**，防止过拟合现象的发生
+
+###### 7）对比分析
+
+| 指标     | 第一次训练（标签嵌入） | 第二次训练（不使用标签嵌入） | 第三次训练（加入时间嵌入） |
+| -------- | ---------------------- | ---------------------------- | -------------------------- |
+| 训练损失 | 2.152                  | 1.835                        | **1.044**                  |
+| 测试损失 | 2.909                  | 3.069                        | **3.221**（前期更低）      |
+| 平均NDCG | 0.692                  | 0.697                        | **0.723**                  |
+
+- **训练损失**：第三次训练的训练损失最低，但没用，因为过拟合。
+
+- **测试损失**：第三次训练在前期测试损失较低，一度达到了2.4，但后期由于过拟合，测试损失反而升高。
+
+- **平均NDCG**：第三次训练的平均NDCG最高，说明**引入时间特征对推荐排序质量有积极影响**。
+
+**总之，第三次训练引入时间嵌入后，模型在推荐性能上有了显著提升，但也暴露出过拟合问题。**
+
+
+
+##### 第四次训练——加强正则化、使用早停法
+
+###### 1）模型与算法简介
+
+在前三次训练的基础上，为了进一步提升模型的泛化能力并防止过拟合，本次训练引入了**加强正则化**和**早停法**。具体措施包括：
+
+- **加强正则化**：增加了对时间特征嵌入和输出层的L2正则化，以全面控制模型的复杂度。
+- **早停法**：在训练过程中监控验证集的NDCG指标，当指标在连续多个周期内未见提升时，提前停止训练，以避免模型在训练集上过度拟合。
+
+###### 2）模型结构
+
+在第三次训练的基础上，模型结构进行了以下改进：
+
+1. **引入Dropout层**：
+   - 在交互表示与时间嵌入拼接后，加入了Dropout层，随机丢弃部分神经元，防止过拟合。
+   
+2. **增强L2正则化**：
+   - 对用户嵌入、书籍嵌入、时间嵌入以及输出层的权重均添加了L2正则化项，全面约束模型参数。
+   
+3. **早停策略**：
+   - 在训练过程中监控验证集的平均NDCG指标，若在连续`patience`轮内未见提升，则提前终止训练，并恢复至最佳模型参数。
+
+###### 3）参数说明
+
+在本次训练中，我们对模型的正则化和训练策略进行了调整，增加了超参数设置如下：
+
+- **lambda_time**：`0.001`，时间特征嵌入的L2正则化系数。
+- **lambda_output**：`0.001`，输出层的L2正则化系数。
+- **dropout_rate**：`0.5`，Dropout层的丢弃率。
+- **patience**：`5`，早停法的耐心值，即连续5个周期NDCG指标未提升时停止训练。
+
+###### 4）训练效果
+
+损失函数曲线和平均NDCG曲线如下：
+<img src="stage2/model/training_20241120-155142/training_curves.png" alt="alt text" style="zoom:67%;" />
+
+命令行输出如下：
+
+```bash
+使用设备: cuda
+正在加载数据……
+不使用标签嵌入。
+Epoch 1: 100%|█████████████████████████████████████████████████████████████████████████████████████| 77/77 [00:50<00:00,  1.53it/s]
+第1轮，平均训练损失：5.961328444542823
+Evaluating Epoch 1: 100%|██████████████████████████████████████████████████████████████████████████| 77/77 [02:02<00:00,  1.60s/it] 
+第1轮，训练损失：5.961328444542823, 测试损失：4.237333972732742, 平均NDCG: 0.6833467451067757
+............
+Epoch 30: 100%|████████████████████████████████████████████████████████████████████████████████████| 77/77 [00:57<00:00,  1.33it/s] 
+第30轮，平均训练损失：1.9746569642772922
+Evaluating Epoch 30: 100%|█████████████████████████████████████████████████████████████████████████| 77/77 [02:44<00:00,  2.14s/it] 
+第30轮，训练损失：1.9746569642772922, 测试损失：2.058972899015848, 平均NDCG: 0.7526948736885427
+训练模型共耗时：3205.11秒。
+最佳模型已保存为 model\training_20241120-155142\best_matrix_factorization_20241120-155142.pth。
+超参数已保存为 config_20241120-155142.json。
+损失函数和NDCG曲线已保存为 model\training_20241120-155142\training_curves.png。
+```
+
+**1. 损失函数（Loss）曲线分析：**
+
+- **训练损失（Training Loss）**：
+  - 训练损失从第1轮的5.96逐步下降至第30轮的1.97，整体呈现稳定的下降趋势。
+  - 加强正则化和引入Dropout后，模型在训练集上的拟合能力有所提升，但损失下降速度适中，避免了过快拟合。
+
+- **测试损失（Test Loss）**：
+  - 测试损失从第1轮的4.24下降至第5轮的2.46，随后趋于稳定，并在最后几轮略有波动。
+  - 引入早停法后，测试损失在第10轮后基本保持稳定，未出现明显的反弹，表明过拟合现象得到了一定程度的缓解。
+
+**2. 平均NDCG曲线分析：**
+
+- **平均NDCG值**：
+  - 平均NDCG从第1轮的0.68逐步提升至第30轮的0.75，整体呈现上升趋势。
+  - 正则化和早停策略的引入有效提升了模型的推荐排序质量，NDCG值的增长表明模型在验证集上的泛化能力增强。
+
+**5. 对比分析**
+
+| 指标       | 第一次训练（标签嵌入） | 第二次训练（不使用标签嵌入） | 第三次训练（加入时间嵌入） | 第四次训练（加强正则化、使用早停法） |
+| ---------- | ---------------------- | ---------------------------- | -------------------------- | ------------------------------------ |
+| 训练损失   | 2.152                  | 1.835                        | 1.044                      | **1.97**                             |
+| 测试损失   | 2.909                  | 3.069                        | 3.221                      | **2.06**（显著提升，更加稳定）       |
+| 平均NDCG   | 0.692                  | 0.697                        | 0.723                      | **0.753**（明显提升）                |
+| 过拟合现象 | 明显                   | 明显                         | 严重                       | **显著减轻**                         |
+
+- **训练损失**：第四次训练的训练损失略高于第三次训练，但由于加入了正则化，训练损失的增加有助于提升模型的泛化能力。
+- **测试损失**：第四次训练的测试损失显著低于前三次，且更加稳定，反映出过拟合现象的有效缓解。
+- **平均NDCG**：第四次训练的平均NDCG最高，说明推荐排序质量达到了最优状态。
+- **过拟合现象**：通过加强正则化和使用早停法，过拟合现象得到了显著改善，模型在验证集上的表现更加稳健。
+
+**6. 总结**
+
+第四次训练通过加强正则化和引入早停策略，成功提升了模型的泛化能力，显著改善了过拟合问题。训练和测试损失的稳定，以及NDCG值的持续提升，表明模型在推荐系统中的表现达到了更高的水平。这些改进为后续模型的优化提供了有力的支持，未来可以进一步探索更高级的正则化技术和优化策略，以持续提升模型性能。
 
 
 

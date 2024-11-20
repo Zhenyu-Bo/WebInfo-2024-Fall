@@ -18,6 +18,15 @@ class BookRatingDataset(Dataset):
         self.tag_embedding_dict = tag_embedding_dict
         self.tag_embedding_dim = tag_embedding_dim
 
+        # 处理时间特征
+        self.data['Timestamp'] = pd.to_datetime(self.data['Time'])
+        self.data['Year'] = self.data['Timestamp'].dt.year
+        self.data['Month'] = self.data['Timestamp'].dt.month
+        self.data['Day'] = self.data['Timestamp'].dt.day
+        self.data['Hour'] = self.data['Timestamp'].dt.hour
+        self.data['Weekday'] = self.data['Timestamp'].dt.weekday
+        self.data['IsWeekend'] = self.data['Weekday'].apply(lambda x: 1 if x >= 5 else 0)
+
     def __len__(self):
         return len(self.data)
 
@@ -33,7 +42,17 @@ class BookRatingDataset(Dataset):
             # 不使用标签嵌入，返回全零张量
             text_embedding = torch.zeros(self.tag_embedding_dim)
 
-        return user, book, rating, text_embedding
+        # 获取时间特征
+        time_features = torch.tensor([
+            row['Year'] - 2000,  # 从2000年开始
+            row['Month'] - 1,  # 从0开始
+            row['Day']- 1,  # 从0开始
+            row['Hour'],
+            row['Weekday'],
+            row['IsWeekend']
+        ], dtype=torch.long)
+
+        return user, book, rating, text_embedding, time_features
 
 def create_id_mapping(id_list):
     # 从ID列表中删除重复项并创建一个排序的列表
@@ -88,8 +107,18 @@ def prepare_dataloaders(csv_path, tag_embedding_dict, test_size=0.5, batch_size=
     train_dataset = BookRatingDataset(train_data, user_to_idx, book_to_idx, tag_embedding_dict, tag_embedding_dim)
     test_dataset = BookRatingDataset(test_data, user_to_idx, book_to_idx, tag_embedding_dict, tag_embedding_dim)
 
-    # 创建训练集和测试集的数据加载器
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
-    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, drop_last=True)
+        # 自定义 collate_fn
+    def collate_fn(batch):
+        users, books, ratings, tag_embeddings, time_features = zip(*batch)
+        users = torch.tensor(users, dtype=torch.long)
+        books = torch.tensor(books, dtype=torch.long)
+        ratings = torch.tensor(ratings, dtype=torch.float32)
+        tag_embeddings = torch.stack(tag_embeddings)
+        time_features = torch.stack(time_features)
+        return users, books, ratings, tag_embeddings, time_features
+
+    # 创建数据加载器
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, collate_fn=collate_fn)
+    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, drop_last=True, collate_fn=collate_fn)
 
     return train_dataloader, test_dataloader, len(user_ids), len(book_ids)

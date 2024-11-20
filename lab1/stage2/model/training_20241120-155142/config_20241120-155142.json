@@ -1,0 +1,20 @@
+{
+    "use_tags": false,
+    "embedding_dim": 32,
+    "hidden_state": 768,
+    "criterion": "MSELoss",
+    "optimizer": "Adam",
+    "learning_rate": 0.01,
+    "num_epochs": 30,
+    "lambda_u": 0.001,
+    "lambda_b": 0.001,
+    "lambda_time": 0.001,
+    "lambda_output": 0.001,
+    "dropout_rate": 0.5,
+    "patience": 5,
+    "batch_size": 4096,
+    "test_size": 0.5,
+    "final_train_loss": 1.9746569642772922,
+    "final_test_loss": 2.058972899015848,
+    "final_ndcg": 0.7526948736885427
+}

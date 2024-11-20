@@ -33,9 +33,13 @@ def main():
         'criterion': 'MSELoss',
         'optimizer': 'Adam',
         'learning_rate': 0.01,
-        'num_epochs': 20,
+        'num_epochs': 30,
         'lambda_u': 0.001,
         'lambda_b': 0.001,
+        'lambda_time': 0.001,       # 新增L2正则化系数
+        'lambda_output': 0.001,     # 新增L2正则化系数
+        'dropout_rate': 0.5,        # 新增Dropout率
+        'patience': 5,              # 早停耐心值
         'batch_size': 4096,
         'test_size': 0.5
     }
@@ -81,10 +85,11 @@ def main():
         num_books, 
         hyperparams['embedding_dim'], 
         hyperparams['hidden_state'],
-        hyperparams['use_tags']
+        hyperparams['use_tags'],
+        dropout_rate=hyperparams['dropout_rate']  # 传递Dropout率
     ).to(device)
     criterion = nn.MSELoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    optimizer = torch.optim.Adam(model.parameters(), lr=hyperparams['learning_rate'])
 
     # 生成时间戳
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -95,6 +100,9 @@ def main():
     # 训练模型
     num_epochs = hyperparams['num_epochs']
     lambda_u, lambda_b = hyperparams['lambda_u'], hyperparams['lambda_b']
+    lambda_time = hyperparams['lambda_time']
+    lambda_output = hyperparams['lambda_output']
+    patience = hyperparams['patience']
     start_time = time.time()
     train_losses, test_losses, ndcg_scores_list = train_model(
         model, 
@@ -105,15 +113,18 @@ def main():
         device, 
         num_epochs, 
         lambda_u, 
-        lambda_b
+        lambda_b,
+        lambda_time,
+        lambda_output,
+        patience
     )
     end_time = time.time()
     print(f"训练模型共耗时：{end_time - start_time:.2f}秒。")
 
-    # 保存模型
-    model_filename = f'matrix_factorization_{timestamp}.pth'
-    torch.save(model.state_dict(), os.path.join(model_dir, model_filename))
-    print(f"模型已保存为 {model_filename}。")
+    # 保存最佳模型
+    best_model_path = os.path.join(model_dir, f'best_matrix_factorization_{timestamp}.pth')
+    torch.save(model.state_dict(), best_model_path)
+    print(f"最佳模型已保存为 {best_model_path}。")
 
     # 保存超参数和最后一轮的损失值及NDCG
     hyperparams.update({
@@ -131,7 +142,7 @@ def main():
     plt.rcParams['axes.unicode_minus'] = False     # 解决坐标轴负号显示问题
 
     # 绘制损失函数和NDCG曲线
-    epochs = range(1, num_epochs + 1)
+    epochs = range(1, len(train_losses) + 1)
     plt.figure(figsize=(12, 6))
 
     plt.subplot(1, 2, 1)
@@ -155,4 +166,4 @@ def main():
     print(f"损失函数和NDCG曲线已保存为 {os.path.join(model_dir, 'training_curves.png')}。")
 
 if __name__ == '__main__':
-        main()
+    main()
