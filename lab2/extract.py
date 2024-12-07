@@ -1,4 +1,5 @@
 # extract.py
+# Author: Zhenyu Bo
 
 def load_base_entities(entity_file_path):
     """

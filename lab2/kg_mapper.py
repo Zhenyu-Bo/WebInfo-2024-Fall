@@ -1,4 +1,5 @@
 # kg_mapper.py
+# Author: Zhenyu Bo
 
 from extract import load_movie_id_map
 
@@ -9,10 +10,10 @@ def create_entity_relation_mappings(triple_list, movie_id_map):
 
     参数：
     - triple_list: 原始三元组列表。
-    - movie_id_map: 原始电影ID到索引的映射字典。
+    - movie_id_map: 电影实体到索引的映射字典。
 
     返回：
-    - entity_id_map: 实体到索引的映射字典。
+    - entity_id_map: 其他实体到索引的映射字典。
     - relation_id_map: 关系到索引的映射字典。
     """
     entity_id_map = {}
@@ -42,7 +43,7 @@ def map_triples_to_ids(triple_list, movie_id_map, entity_id_map, relation_id_map
 
     参数：
     - triple_list: 原始三元组列表。
-    - movie_id_map: 原始电影ID到索引的映射字典。
+    - movie_id_map: 电影实体到索引的映射字典。
     - entity_id_map: 其他实体到索引的映射字典。
     - relation_id_map: 关系到索引的映射字典。
 

@@ -1,4 +1,5 @@
 # kg_filter.py
+# Author: Zhenyu Bo
 
 def filter_kg(triple_list, min_entity_freq, min_relation_freq):
     """

@@ -1,4 +1,5 @@
 # main.py
+# Author: Zhenyu Bo
 
 from extract import load_base_entities, load_entities_from_triples
 from kg_builder import build_kg

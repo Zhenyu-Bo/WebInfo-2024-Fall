@@ -1,4 +1,5 @@
 # kg_builder.py
+# Author: Zhenyu Bo
 
 import gzip
 from tqdm import tqdm
