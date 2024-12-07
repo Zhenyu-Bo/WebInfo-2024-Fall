@@ -1,6 +1,6 @@
 # kg_mapper.py
 
-from extract import load_movie_id_map, load_id_to_entity_map
+from extract import load_movie_id_map
 
 
 def create_entity_relation_mappings(triple_list, movie_id_map):
