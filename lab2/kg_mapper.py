@@ -1,23 +1,7 @@
 # kg_mapper.py
 
+from extract import load_movie_id_map, load_id_to_entity_map
 
-def load_movie_id_map(movie_id_map_path):
-    """
-    加载电影ID映射关系。
-
-    参数：
-    - movie_id_map_path: 电影ID映射文件路径。
-
-    返回：
-    - movie_id_map: 原始电影ID到索引的映射字典。
-    """
-    movie_id_map = {}
-    with open(movie_id_map_path, 'r', encoding='utf-8') as f:
-        for line in f:
-            original_id, mapped_id = line.strip().split('\t')
-            movie_uri = f"<http://rdf.freebase.com/ns/m/{original_id}>"
-            movie_id_map[movie_uri] = int(mapped_id)
-    return movie_id_map
 
 def create_entity_relation_mappings(triple_list, movie_id_map):
     """
@@ -102,11 +86,12 @@ def save_mapped_triples(mapped_triples, output_path):
 def main():
     # 文件路径
     MOVIE_ID_MAP_PATH = 'data/movie_id_map.txt'
+    DOUBAN_TO_FB_PATH = 'data/douban2fb.txt'
     KG_INPUT_PATH = 'data/kg_filtered.txt.gz'  # 之前生成的知识图谱文件路径
     KG_OUTPUT_PATH = 'baseline/data/Douban/kg_final.txt'
 
     # 加载电影ID映射
-    movie_id_map = load_movie_id_map(MOVIE_ID_MAP_PATH)
+    movie_id_map = load_movie_id_map(MOVIE_ID_MAP_PATH, DOUBAN_TO_FB_PATH)
     num_of_movies = max(movie_id_map.values()) + 1
 
     # 加载知识图谱三元组

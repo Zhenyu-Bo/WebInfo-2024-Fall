@@ -2,13 +2,7 @@
 
 def load_base_entities(entity_file_path):
     """
-    加载基础实体集合。
-
-    参数：
-    - entity_file_path: 基础实体文件路径。
-
-    返回：
-    - base_entities: 基础实体的集合。
+    获得电影 ID 在 Freebase 中对应的实体集合。
     """
     base_entities = set()
     with open(entity_file_path, 'r', encoding='utf-8') as f:
@@ -36,3 +30,28 @@ def load_entities_from_triples(triple_list):
         entities_set.update([h, t])
         relations_set.add(r)
     return entities_set, relations_set
+
+def load_movie_id_map(movie_id_map_path, douban2fb_path):
+    """
+    加载电影ID映射关系。
+    """
+    douban_id_to_entity_map = load_id_to_entity_map(douban2fb_path)
+    movie_id_map = {}
+    with open(movie_id_map_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            douban_id, mapped_id = line.strip().split('\t')
+            movie_uri = douban_id_to_entity_map[douban_id]
+            movie_id_map[movie_uri] = int(mapped_id)
+    return movie_id_map
+
+def load_id_to_entity_map(douban2fb_path):
+    """
+    加载豆瓣电影ID到实体的映射关系。
+    """
+    douban_id_to_entity_map = {}
+    with open(douban2fb_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            douban_id, entity = line.strip().split()
+            entity_uri = f"<http://rdf.freebase.com/ns/{entity}>"
+            douban_id_to_entity_map[douban_id] = entity_uri
+    return douban_id_to_entity_map
