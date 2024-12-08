@@ -101,12 +101,13 @@ def main():
         for line in f:
             h, r, t = line.strip().split('\t')
             triple_list.append((h, r, t))
-
+    num_of_triples = len(triple_list)
+    
     # 创建实体和关系的索引映射
     entity_id_map, relation_id_map = create_entity_relation_mappings(triple_list, movie_id_map)
     num_of_entities = num_of_movies + len(entity_id_map)
     num_of_relations = len(relation_id_map)
-    print(f"电影总数：{num_of_movies}，实体总数：{num_of_entities}，关系总数：{num_of_relations}")
+    print(f"电影总数：{num_of_movies}，三元组总数：{num_of_triples}，实体总数：{num_of_entities}，关系总数：{num_of_relations}")
 
     # 将三元组映射为索引表示
     mapped_triples = map_triples_to_ids(triple_list, movie_id_map, entity_id_map, relation_id_map)

@@ -1,12 +1,12 @@
 # extract.py
 # Author: Zhenyu Bo
 
-def load_base_entities(entity_file_path):
+def load_base_entities(douban2fb_path):
     """
     获得电影 ID 在 Freebase 中对应的实体集合。
     """
     base_entities = set()
-    with open(entity_file_path, 'r', encoding='utf-8') as f:
+    with open(douban2fb_path, 'r', encoding='utf-8') as f:
         for line in f:
             _, entity = line.strip().split()
             entity_uri = f"<http://rdf.freebase.com/ns/{entity}>"

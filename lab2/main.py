@@ -23,6 +23,7 @@ def main():
     for entity in base_entities:
         assert entity in entities_set
     print("知识图谱验证完成。")
+    print("知识图谱包含三元组数量：", len(triple_list))
     print("初始知识图谱包含实体数量：", len(entities_set))
     print("初始知识图谱包含关系数量：", len(relations_set))
 
@@ -37,9 +38,9 @@ def main():
             f_out.write('\t'.join(triple) + '\n')
 
     # 统计过滤后的实体和关系
-    entities_set_filtered, relations_set_filtered = load_entities_from_triples(filtered_triples)
-    print("过滤后知识图谱包含实体数量：", len(entities_set_filtered))
-    print("过滤后知识图谱包含关系数量：", len(relations_set_filtered))
+    # entities_set_filtered, relations_set_filtered = load_entities_from_triples(filtered_triples)
+    # print("过滤后知识图谱包含实体数量：", len(entities_set_filtered))
+    # print("过滤后知识图谱包含关系数量：", len(relations_set_filtered))
 
 if __name__ == '__main__':
     main()
