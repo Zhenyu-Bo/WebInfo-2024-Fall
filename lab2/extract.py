@@ -37,13 +37,13 @@ def load_movie_id_map(movie_id_map_path, douban2fb_path):
     加载电影ID映射关系。
     """
     douban_id_to_entity_map = load_id_to_entity_map(douban2fb_path)
-    movie_id_map = {}
+    movie_index_map = {}
     with open(movie_id_map_path, 'r', encoding='utf-8') as f:
         for line in f:
             douban_id, mapped_id = line.strip().split('\t')
             movie_uri = douban_id_to_entity_map[douban_id]
-            movie_id_map[movie_uri] = int(mapped_id)
-    return movie_id_map
+            movie_index_map[movie_uri] = int(mapped_id)
+    return movie_index_map
 
 def load_id_to_entity_map(douban2fb_path):
     """

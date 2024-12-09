@@ -13,10 +13,6 @@ def filter_kg(triple_list, min_entity_freq, min_relation_freq):
     返回：
     - filtered_triples: 过滤后的三元组列表。
     """
-    relation_count = {}
-    for _, r, _ in triple_list:
-        relation_count[r] = relation_count.get(r, 0) + 1
-        
     # 过滤实体
     entity_count = {}
     for h, _, t in triple_list:
@@ -25,6 +21,9 @@ def filter_kg(triple_list, min_entity_freq, min_relation_freq):
     selected_entities = {e for e, count in entity_count.items() if e.startswith('<http://rdf.freebase.com/ns/') and count >= min_entity_freq}
 
     # 过滤关系
+    relation_count = {}
+    for _, r, _ in triple_list:
+        relation_count[r] = relation_count.get(r, 0) + 1
     selected_relations = {r for r, count in relation_count.items() if count >= min_relation_freq}
     # if len(selected_relations) > max_relations:
     #     selected_relations = set(list(selected_relations)[:max_relations])
