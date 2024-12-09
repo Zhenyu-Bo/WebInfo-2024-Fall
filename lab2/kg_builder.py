@@ -15,13 +15,13 @@ def build_kg(freebase_path, kg_output_path, entities_set):
     """
     triple_list = []
     with gzip.open(freebase_path, 'rb') as f_in, \
-            open(kg_output_path, 'w', encoding='utf-8') as f_out:
+            gzip.open(kg_output_path, 'wb') as f_out:
         # 使用 tqdm 包装文件对象，以显示进度条
         for line in tqdm(f_in, desc="Processing", unit=" lines"):
             line = line.strip()
             h, r, t = line.decode().split('\t')[:3]
             if h in entities_set or t in entities_set:
-                f_out.write(h + '\t' + r + '\t' + t + '\n')
+                f_out.write((h + '\t' + r + '\t' + t + '\n').encode())
                 triple_list.append((h, r, t))
     print("知识图谱构建完成，共包含三元组数量：", len(triple_list))
     return triple_list
