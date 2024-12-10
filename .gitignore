@@ -1,3 +1,4 @@
 # 这个文件超过100M太大了 push不上去
 lab1/data/Contacts.txt
 lab2/data/freebase_douban.gz
+__pycache__/
