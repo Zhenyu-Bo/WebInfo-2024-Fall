@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 def _L2_loss_mean(x):
-    return torch.mean(torch.sum(torch.pow(x, 2), dim=1, keepdim=False) / 2.)
+    return torch.mean(torch.sum(torch.pow(x, 2), dim=1) / 2.)
 
 
 class Embedding_based(nn.Module):
@@ -57,22 +57,22 @@ class Embedding_based(nn.Module):
         neg_t_embed = self.entity_embed(neg_t)                                          # (kg_batch_size, embed_dim)
 
         # 1. 计算头实体，尾实体和负采样的尾实体在对应关系空间中的投影嵌入
-        r_mul_h =                                                                       # (kg_batch_size, relation_dim)
-        r_mul_pos_t =                                                                   # (kg_batch_size, relation_dim)
-        r_mul_neg_t =                                                                   # (kg_batch_size, relation_dim)
+        r_mul_h = torch.matmul(h_embed.unsqueeze(1), W_r).squeeze(1)                    # (kg_batch_size, relation_dim)
+        r_mul_pos_t = torch.matmul(pos_t_embed.unsqueeze(1), W_r).squeeze(1)            # (kg_batch_size, relation_dim)
+        r_mul_neg_t = torch.matmul(neg_t_embed.unsqueeze(1), W_r).squeeze(1)            # (kg_batch_size, relation_dim)
 
         # 2. 对关系嵌入，头实体嵌入，尾实体嵌入，负采样的尾实体嵌入进行L2范数归一化
-        r_embed = 
-        r_mul_h = 
-        r_mul_pos_t = 
-        r_mul_neg_t = 
+        r_embed = F.normalize(r_embed, p=2, dim=1)
+        r_mul_h = F.normalize(r_mul_h, p=2, dim=1)
+        r_mul_pos_t = F.normalize(r_mul_pos_t, p=2, dim=1)
+        r_mul_neg_t = F.normalize(r_mul_neg_t, p=2, dim=1)
 
-        # 3. 分别计算正样本三元组 (h_embed, r_embed, pos_t_embed) 和负样本三元组 (h_embed, r_embed, neg_t_embed) 的得分
-        pos_score =                                                                     # (kg_batch_size)
-        neg_score =                                                                     # (kg_batch_size)
+        # 3. 分别计算正样本三元组和负样本三元组的得分
+        pos_score = torch.sum(torch.pow(r_mul_h + r_embed - r_mul_pos_t, 2), dim=1)     # (kg_batch_size)
+        neg_score = torch.sum(torch.pow(r_mul_h + r_embed - r_mul_neg_t, 2), dim=1)     # (kg_batch_size)
 
-        # 4. 使用 BPR Loss 进行优化，尽可能使负样本的得分大于正样本的得分
-        kg_loss = 
+        # 4. 使用 BPR Loss 进行优化
+        kg_loss = (-1.0) * torch.mean(F.logsigmoid(neg_score - pos_score))
 
         l2_loss = _L2_loss_mean(r_mul_h) + _L2_loss_mean(r_embed) + _L2_loss_mean(r_mul_pos_t) + _L2_loss_mean(r_mul_neg_t)
         loss = kg_loss + self.kg_l2loss_lambda * l2_loss
@@ -92,18 +92,18 @@ class Embedding_based(nn.Module):
         pos_t_embed = self.entity_embed(pos_t)                                          # (kg_batch_size, embed_dim)
         neg_t_embed = self.entity_embed(neg_t)                                          # (kg_batch_size, embed_dim)
 
-        # 5. 对关系嵌入，头实体嵌入，尾实体嵌入，负采样的尾实体嵌入进行L2范数归一化
-        r_embed = 
-        h_embed = 
-        pos_t_embed = 
-        neg_t_embed = 
+        # 5. 对嵌入进行L2范数归一化
+        r_embed = F.normalize(r_embed, p=2, dim=1)
+        h_embed = F.normalize(h_embed, p=2, dim=1)
+        pos_t_embed = F.normalize(pos_t_embed, p=2, dim=1)
+        neg_t_embed = F.normalize(neg_t_embed, p=2, dim=1)
 
-        # 6. 分别计算正样本三元组 (h_embed, r_embed, pos_t_embed) 和负样本三元组 (h_embed, r_embed, neg_t_embed) 的得分
-        pos_score =                                                                      # (kg_batch_size)
-        neg_score =                                                                      # (kg_batch_size)
+        # 6. 分别计算正样本和负样本的得分
+        pos_score = torch.norm(h_embed + r_embed - pos_t_embed, p=2, dim=1)             # (kg_batch_size)
+        neg_score = torch.norm(h_embed + r_embed - neg_t_embed, p=2, dim=1)             # (kg_batch_size)
 
-        # 7. 使用 BPR Loss 进行优化，尽可能使负样本的得分大于正样本的得分
-        kg_loss = 
+        # 7. 使用 BPR Loss 进行优化
+        kg_loss = (-1.0) * torch.mean(F.logsigmoid(neg_score - pos_score))
 
         l2_loss = _L2_loss_mean(h_embed) + _L2_loss_mean(r_embed) + _L2_loss_mean(pos_t_embed) + _L2_loss_mean(neg_t_embed)
         loss = kg_loss + self.kg_l2loss_lambda * l2_loss
@@ -123,15 +123,14 @@ class Embedding_based(nn.Module):
         item_pos_kg_embed = self.entity_embed(item_pos_ids)                             # (cf_batch_size, embed_dim)
         item_neg_kg_embed = self.entity_embed(item_neg_ids)                             # (cf_batch_size, embed_dim)
         
-        # 8. 为 物品嵌入 注入 实体嵌入的语义信息
-        item_pos_cf_embed =                                                             # (cf_batch_size, embed_dim)
-        item_neg_cf_embed =                                                             # (cf_batch_size, embed_dim)
+        # 8. 为物品嵌入注入实体嵌入的语义信息
+        item_pos_cf_embed = item_pos_embed + item_pos_kg_embed                          # (cf_batch_size, embed_dim)
+        item_neg_cf_embed = item_neg_embed + item_neg_kg_embed                          # (cf_batch_size, embed_dim)
 
         pos_score = torch.sum(user_embed * item_pos_cf_embed, dim=1)                    # (cf_batch_size)
         neg_score = torch.sum(user_embed * item_neg_cf_embed, dim=1)                    # (cf_batch_size)
 
-        cf_loss = (-1.0) * torch.log(1e-10 + F.sigmoid(pos_score - neg_score))
-        cf_loss = torch.mean(cf_loss)
+        cf_loss = (-1.0) * torch.mean(torch.log(1e-10 + F.sigmoid(pos_score - neg_score)))
 
         l2_loss = _L2_loss_mean(user_embed) + _L2_loss_mean(item_pos_cf_embed) + _L2_loss_mean(item_neg_cf_embed)
         loss = cf_loss + self.cf_l2loss_lambda * l2_loss
@@ -171,8 +170,8 @@ class Embedding_based(nn.Module):
         item_embed = self.item_embed(item_ids)                                          # (n_items, embed_dim)
         item_kg_embed = self.entity_embed(item_ids)                                     # (n_items, embed_dim)
 
-        # 9. 为 物品嵌入 注入 实体嵌入的语义信息
-        item_cf_embed =                                                                 # (n_items, embed_dim)
+        # 9. 为物品嵌入注入实体嵌入的语义信息
+        item_cf_embed = item_embed + item_kg_embed                                      # (n_items, embed_dim)
 
         cf_score = torch.matmul(user_embed, item_cf_embed.transpose(0, 1))              # (n_users, n_items)
         
@@ -184,5 +183,3 @@ class Embedding_based(nn.Module):
             return self.calc_loss(*input)
         else:
             return self.calc_score(*input)
-
-

@@ -57,7 +57,7 @@ class DataLoaderBase(object):
 
 
     def load_kg(self, filename):
-        kg_data = pd.read_csv(filename, sep=' ', names=['h', 'r', 't'], engine='python')
+        kg_data = pd.read_csv(filename, sep='\t', names=['h', 'r', 't'], engine='python')
         kg_data = kg_data.drop_duplicates()
         return kg_data
 
