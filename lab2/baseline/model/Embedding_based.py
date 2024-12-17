@@ -178,8 +178,15 @@ class Embedding_based(nn.Module):
         return cf_score
 
 
-    def forward(self, *input, is_train):
-        if is_train:
-            return self.calc_loss(*input)
-        else:
+    def forward(self, *input, mode):
+        if mode == 'cf':
+            return self.calc_cf_loss(*input)
+        elif mode == 'kg':
+            if self.KG_embedding_type == 'TransR':
+                return self.calc_kg_loss_TransR(*input)
+            elif self.KG_embedding_type == 'TransE':
+                return self.calc_kg_loss_TransE(*input)
+        elif mode == 'predict':
             return self.calc_score(*input)
+        else:
+            raise ValueError('Mode can only be "cf", "kg", or "predict".')

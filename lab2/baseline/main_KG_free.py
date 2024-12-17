@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 from model.KG_free import KG_free
-from parser.parser_KG_free import *
+from parsers.parser_KG_free import *
 from utils.log_helper import *
 from utils.metrics import *
 from utils.model_helper import *

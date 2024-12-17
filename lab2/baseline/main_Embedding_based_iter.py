@@ -4,6 +4,7 @@ import random
 from time import time
 
 import pandas as pd
+import matplotlib.pyplot as plt  # 新增导入
 from tqdm import tqdm
 import torch.nn as nn
 import torch.optim as optim
@@ -39,7 +40,7 @@ def evaluate(model, dataloader, Ks, device):
             batch_user_ids = batch_user_ids.to(device)
 
             with torch.no_grad():
-                batch_scores = model(batch_user_ids, item_ids, is_train=False)       # (n_batch_users, n_items)
+                batch_scores = model(batch_user_ids, item_ids, mode='predict')       # (n_batch_users, n_items)
 
             batch_scores = batch_scores.cpu()
             batch_metrics = calc_metrics_at_k(batch_scores, train_user_dict, test_user_dict, batch_user_ids.cpu().numpy(), item_ids.cpu().numpy(), Ks, device)
@@ -95,43 +96,75 @@ def train(args):
     epoch_list = []
     metrics_list = {k: {'precision': [], 'recall': [], 'ndcg': []} for k in Ks}
 
+    # 新增：用于存储每个 epoch 的损失
+    cf_loss_list = []
+    kg_loss_list = []
+
     # train model
     for epoch in range(1, args.n_epoch + 1):
         model.train()
 
-        # train kg & cf
+        # 优化 CF 损失
         time1 = time()
-        total_loss = 0
-        n_batch = data.n_cf_train // data.cf_batch_size + 1
+        total_cf_loss = 0
+        n_cf_batch = data.n_cf_train // data.cf_batch_size + 1
 
-        for iter in range(1, n_batch + 1):
-            time2 = time()
+        for iter in range(1, n_cf_batch + 1):
             cf_batch_user, cf_batch_pos_item, cf_batch_neg_item = data.generate_cf_batch(data.train_user_dict, data.cf_batch_size)
-            kg_batch_head, kg_batch_relation, kg_batch_pos_tail, kg_batch_neg_tail = data.generate_kg_batch(data.kg_dict, data.kg_batch_size, data.n_entities)
-
             cf_batch_user = cf_batch_user.to(device)
             cf_batch_pos_item = cf_batch_pos_item.to(device)
             cf_batch_neg_item = cf_batch_neg_item.to(device)
 
+            optimizer.zero_grad()
+            cf_loss = model(cf_batch_user, cf_batch_pos_item, cf_batch_neg_item, mode='cf')
+            if torch.isnan(cf_loss):
+                logging.info('ERROR: Epoch {:04d} Iter {:04d} / {:04d} CF Loss is nan.'.format(epoch, iter, n_cf_batch))
+                sys.exit()
+            cf_loss.backward()
+            optimizer.step()
+            total_cf_loss += cf_loss.item()
+
+            if (iter % args.print_every) == 0:
+                logging.info('CF Training: Epoch {:04d} Iter {:04d} / {:04d} | Iter CF Loss {:.4f} | CF Loss Mean {:.4f}'.format(
+                    epoch, iter, n_cf_batch, cf_loss.item(), total_cf_loss / iter))
+
+        avg_cf_loss = total_cf_loss / n_cf_batch
+        logging.info('CF Training: Epoch {:04d} Total Iter {:04d} | Total CF Loss {:.4f}'.format(
+            epoch, n_cf_batch, avg_cf_loss))
+
+        # 记录 CF 损失
+        cf_loss_list.append(avg_cf_loss)
+
+        # 优化 KG 损失
+        total_kg_loss = 0
+        n_kg_batch = data.n_kg_data // data.kg_batch_size + 1
+
+        for iter in range(1, n_kg_batch + 1):
+            kg_batch_head, kg_batch_relation, kg_batch_pos_tail, kg_batch_neg_tail = data.generate_kg_batch(data.kg_dict, data.kg_batch_size, data.n_entities)
             kg_batch_head = kg_batch_head.to(device)
             kg_batch_relation = kg_batch_relation.to(device)
             kg_batch_pos_tail = kg_batch_pos_tail.to(device)
             kg_batch_neg_tail = kg_batch_neg_tail.to(device)
 
-            batch_loss = model(cf_batch_user, cf_batch_pos_item, cf_batch_neg_item, kg_batch_head, kg_batch_relation, kg_batch_pos_tail, kg_batch_neg_tail, is_train=True)
-
-            if np.isnan(batch_loss.cpu().detach().numpy()):
-                logging.info('ERROR: Epoch {:04d} Iter {:04d} / {:04d} Loss is nan.'.format(epoch, iter, n_batch))
-                sys.exit()
-
-            batch_loss.backward()
-            optimizer.step()
             optimizer.zero_grad()
-            total_loss += batch_loss.item()
+            kg_loss = model(kg_batch_head, kg_batch_relation, kg_batch_pos_tail, kg_batch_neg_tail, mode='kg')
+            if torch.isnan(kg_loss):
+                logging.info('ERROR: Epoch {:04d} Iter {:04d} / {:04d} KG Loss is nan.'.format(epoch, iter, n_kg_batch))
+                sys.exit()
+            kg_loss.backward()
+            optimizer.step()
+            total_kg_loss += kg_loss.item()
 
             if (iter % args.print_every) == 0:
-                logging.info('KG & CF Training: Epoch {:04d} Iter {:04d} / {:04d} | Time {:.1f}s | Iter Loss {:.4f} | Iter Mean Loss {:.4f}'.format(epoch, iter, n_batch, time() - time2, batch_loss.item(), total_loss / iter))
-        logging.info('KG & CF Training: Epoch {:04d} Total Iter {:04d} | Total Time {:.1f}s | Iter Mean Loss {:.4f}'.format(epoch, n_batch, time() - time1, total_loss / n_batch))
+                logging.info('KG Training: Epoch {:04d} Iter {:04d} / {:04d} | Iter KG Loss {:.4f} | KG Loss Mean {:.4f}'.format(
+                    epoch, iter, n_kg_batch, kg_loss.item(), total_kg_loss / iter))
+
+        avg_kg_loss = total_kg_loss / n_kg_batch
+        logging.info('KG Training: Epoch {:04d} Total Iter {:04d} | Total KG Loss {:.4f}'.format(
+            epoch, n_kg_batch, avg_kg_loss))
+
+        # 记录 KG 损失
+        kg_loss_list.append(avg_kg_loss)
 
         # evaluate cf
         if (epoch % args.evaluate_every) == 0 or epoch == args.n_epoch:
@@ -154,6 +187,17 @@ def train(args):
                 logging.info('Save model on epoch {:04d}!'.format(epoch))
                 best_epoch = epoch
 
+    # 保存损失曲线图
+    plt.figure()
+    plt.plot(range(1, len(cf_loss_list) + 1), cf_loss_list, label='CF Loss')
+    plt.plot(range(1, len(kg_loss_list) + 1), kg_loss_list, label='KG Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title('Training Loss')
+    plt.legend()
+    plt.savefig(os.path.join(args.save_dir, 'training_loss.png'))
+    plt.close()
+
     # save metrics
     metrics_df = [epoch_list]
     metrics_cols = ['epoch_idx']
@@ -163,7 +207,7 @@ def train(args):
             metrics_cols.append('{}@{}'.format(m, k))
     metrics_df = pd.DataFrame(metrics_df).transpose()
     metrics_df.columns = metrics_cols
-    metrics_df.to_csv(args.save_dir + '/metrics_Emb_mul.tsv', sep='\t', index=False)
+    metrics_df.to_csv(args.save_dir + '/metrics_Emb_iterative.tsv', sep='\t', index=False)
 
     # print best metrics
     best_metrics = metrics_df.loc[metrics_df['epoch_idx'] == best_epoch].iloc[0].to_dict()
@@ -189,7 +233,7 @@ def predict(args):
     k_max = max(Ks)
 
     cf_scores, metrics_dict = evaluate(model, data, Ks, device)
-    np.save(args.save_dir + 'cf_scores.npy', cf_scores)
+    np.save(args.save_dir + '/cf_scores.npy', cf_scores)
     print('CF Evaluation: Precision [{:.4f}, {:.4f}], Recall [{:.4f}, {:.4f}], NDCG [{:.4f}, {:.4f}]'.format(
         metrics_dict[k_min]['precision'], metrics_dict[k_max]['precision'], metrics_dict[k_min]['recall'], metrics_dict[k_max]['recall'], metrics_dict[k_min]['ndcg'], metrics_dict[k_max]['ndcg']))
 

@@ -314,6 +314,73 @@ def map_triples_to_ids(triple_list, movie_index_map, entity_id_map, relation_id_
    item_cf_embed = item_embed * item_kg_embed
    ```
 
+### 3.5 【选做】将多任务方式更改为迭代优化方式
+
+要将目前的多任务联合训练方式更改为迭代优化方式，也就是说，交替地优化知识图谱（KG）损失和协同过滤（CF）损失，需要对训练过程进行修改。具体来说，可以在每个训练周期中分开计算和优化 KG 损失和 CF 损失，而不是将它们加在一起同时优化。
+
+将`main_Embedding_based.py`改写，改写后的代码保存在`main_Embedding_based_iter.py`中。
+
+以下是具体的修改步骤：
+
+1. **修改 `train`函数中的训练循环：**
+
+ 在当前的` train`函数中，模型是在同一个循环中同时计算 KG 损失和 CF 损失，并将它们相加后进行优化。我们需要将这个过程拆分成两个独立的步骤，先优化 CF 损失，再优化 KG 损失，或者反过来。可以在每个 epoch 中交替进行。
+
+   ```python
+   for epoch in range(1, args.n_epoch + 1):
+       model.train()
+
+       # 首先优化 CF 损失
+       total_cf_loss = 0
+       n_cf_batch = data.n_cf_train // data.cf_batch_size + 1
+       for iter in range(1, n_cf_batch + 1):
+           cf_batch_user, cf_batch_pos_item, cf_batch_neg_item = data.generate_cf_batch(data.train_user_dict, data.cf_batch_size)
+           cf_batch_user = cf_batch_user.to(device)
+           cf_batch_pos_item = cf_batch_pos_item.to(device)
+           cf_batch_neg_item = cf_batch_neg_item.to(device)
+
+           optimizer.zero_grad()
+           cf_loss = model.calc_cf_loss(cf_batch_user, cf_batch_pos_item, cf_batch_neg_item)
+           cf_loss.backward()
+           optimizer.step()
+           total_cf_loss += cf_loss.item()
+
+       # 然后优化 KG 损失
+       total_kg_loss = 0
+       n_kg_batch = data.n_kg_train // data.kg_batch_size + 1
+       for iter in range(1, n_kg_batch + 1):
+           kg_batch_head, kg_batch_relation, kg_batch_pos_tail, kg_batch_neg_tail = data.generate_kg_batch(data.kg_dict, data.kg_batch_size, data.n_entities)
+           kg_batch_head = kg_batch_head.to(device)
+           kg_batch_relation = kg_batch_relation.to(device)
+           kg_batch_pos_tail = kg_batch_pos_tail.to(device)
+           kg_batch_neg_tail = kg_batch_neg_tail.to(device)
+
+           optimizer.zero_grad()
+           kg_loss = model.calc_kg_loss(kg_batch_head, kg_batch_relation, kg_batch_pos_tail, kg_batch_neg_tail)
+           kg_loss.backward()
+           optimizer.step()
+           total_kg_loss += kg_loss.item()
+
+       # 打印损失
+       logging.info('Epoch {:04d} | CF Loss {:.4f} | KG Loss {:.4f}'.format(epoch, total_cf_loss / n_cf_batch, total_kg_loss / n_kg_batch))
+   ```
+
+3. **修改 `forward`函数以适应需求：**
+
+修改原来的`is_train`函数为`mode`，可以根据传入的参数决定调用哪个损失函数。
+
+   ```python
+   def forward(self, *input, mode):
+       if mode == 'cf':
+           return self.calc_cf_loss(*input)
+       elif mode == 'kg':
+           return self.calc_kg_loss(*input)
+       else:
+           raise ValueError('Mode can only be "cf" or "kg".')
+   ```
+
+除此以外，我们还调用了`matplotlib`实现损失函数的可视化
+
 ##  4. 实验结果
 
 ### 基础推荐方法
@@ -357,9 +424,7 @@ python3 main_KG_free.py
 
 ##  5. 实验结果分析
 
-
-
-#### 一、基础推荐方法与知识感知推荐的比较
+### 一、基础推荐方法与知识感知推荐的比较
 
 从实验结果中可以看出，**知识感知推荐方法**（即引入知识图谱嵌入的方法）相比于**基础推荐方法**，在各项指标上都有一定程度的提升。
 
@@ -385,7 +450,47 @@ python3 main_KG_free.py
 
 可以看出，引入知识图谱嵌入的推荐方法在 **Recall** 和 **NDCG** 指标上均有提升。这表明利用知识图谱提供的额外信息，能够增强物品表示的丰富性，从而提高推荐性能。
 
-#### 二、不同知识图谱嵌入方法的比较
+### **二、 多任务学习与迭代优化的比较**
+
+为进一步探讨不同优化策略的影响，我们对**多任务学习**与**迭代优化**两种方法进行了对比分析。
+
+#### **指标对比**
+
+| 方法         | Recall@5 | NDCG@5 | Recall@10 | NDCG@10 |
+| ------------ | -------- | ------ | --------- | ------- |
+| **多任务**   | 0.0704   | 0.3285 | 0.1151    | 0.2969  |
+| **迭代优化** | 0.0692   | 0.3136 | 0.1130    | 0.2839  |
+
+**迭代优化的趋势变化**：
+
+| Epoch | Recall@5 | NDCG@5 | Recall@10 | NDCG@10 |
+| ----- | -------- | ------ | --------- | ------- |
+| 10    | 0.0443   | 0.2144 | 0.0841    | 0.2085  |
+| 20    | 0.0606   | 0.2841 | 0.1021    | 0.2593  |
+| 30    | 0.0663   | 0.3063 | 0.1131    | 0.2811  |
+| 40    | 0.0692   | 0.3136 | 0.1130    | 0.2839  |
+| 50    | 0.0650   | 0.3054 | 0.1123    | 0.2836  |
+| 100   | 0.0611   | 0.2799 | 0.1046    | 0.2587  |
+
+损失函数图如下
+
+![image](baseline\trained_model\Douban\Embedding_based\dim32_lr0.001_l20.0001_TransE_20241217180203\training_loss.png)
+
+可以看到，KG Loss早早收敛，由于本实验是采用的知识图谱(KG)进行的优化训练，所以尽管在100轮后CF Loss还能继续下降，仍然终止训练。
+
+#### **分析与对比**
+
+1. **性能对比**
+   - **多任务学习**：性能较为稳定，最佳 Recall@5 为 **0.0704**，NDCG@5 为 **0.3285**。
+   - **迭代优化**：在前期（Epoch 40）达到最佳性能，Recall@5 为 **0.0692**，NDCG@5 为 **0.3136**，但后期存在波动。
+2. **训练过程**
+   - **多任务学习**：同时优化 CF 损失和 KG 损失，参数更新较为平滑，收敛更稳定。
+   - **迭代优化**：交替优化 CF 损失和 KG 损失，训练过程较不稳定，容易在后期出现参数震荡。
+3. **结果结论**
+   - 多任务学习的表现整体优于迭代优化，尤其在 NDCG 指标上优势明显。
+   - 迭代优化的训练前期表现较好，但收敛性不如多任务学习。
+
+### 三、不同知识图谱嵌入方法的比较
 
 对比**逐元素相加**和**逐元素相乘**两种嵌入方法，可以发现：
 
@@ -401,20 +506,19 @@ python3 main_KG_free.py
 | **Recall@10** |  0.1151  |  0.1159  |      -0.0008      |
 | **NDCG@10**   |  0.2969  |  0.2886  |      +0.0083      |
 
-#### 三、可能的原因分析
+#### 可能的原因分析
 
 1. **信息融合方式的影响**：
-
    - **逐元素相加**：
-
+   
      - **优势**：相加操作等效于对不同来源的特征进行线性融合，可能更有利于保留并综合物品嵌入和知识图谱嵌入的原始信息。
      - **影响**：在相加的过程中，嵌入向量的每个维度的信息能够被充分利用，提升模型的表达能力。
-
+   
    - **逐元素相乘**：
-
+   
      - **优势**：相乘操作能够捕获物品嵌入和知识图谱嵌入之间的交互关系。
      - **影响**：相乘可能会导致嵌入向量的值变小，甚至接近于零，可能会导致信息的损失。在模型训练不足或数据不充分的情况下，效果可能不如相加明显。
-
+   
 2. **模型复杂度和泛化能力**：
 
    - **相加嵌入**的模型复杂度相对较低，更容易训练和收敛，泛化能力可能更好。
@@ -425,7 +529,7 @@ python3 main_KG_free.py
    - 数据集中物品和知识图谱实体的特征可能更适合线性组合，即相加方式更能体现其关联性。
 
 
-#### 四、基础推荐方法与知识感知推荐的差异分析
+### 四、基础推荐方法与知识感知推荐的差异分析
 
 1. **知识感知推荐的优势**：
 
@@ -438,23 +542,12 @@ python3 main_KG_free.py
    - **模型简单**：当前模型仅仅进行了简单的嵌入融合，未充分利用知识图谱的结构信息。
    - **数据稀疏性**：在冷启动或长尾物品的情况下，知识图谱的作用可能更明显，而在数据相对丰富时，提升较为有限。
 
-<!-- #### 五、总结与展望
+### 五、简要总结
 
-- **实验总结**：
-
-  - 引入知识图谱嵌入的知识感知推荐方法相较于基础推荐方法，在推荐性能上有所提升。
-  - 在两种嵌入方式中，逐元素相加嵌入在大多数指标上表现更好，尤其是在 NDCG 指标上，说明其在推荐结果的质量和相关性方面有更优的表现。
-
-- **未来改进方向**：
-
-  1. **优化嵌入方式**：尝试更高级的嵌入融合方法，如采用注意力机制、自适应加权等方式，更智能地融合物品和知识图谱的嵌入。
-  2. **引入更复杂的模型**：例如使用图神经网络（GNN）来更充分地挖掘知识图谱的结构信息，提升模型的表达能力。
-  3. **超参数调优**：针对不同的嵌入方式，分别调整超参数，以期获得最优的模型性能。
-  4. **数据增强与清洗**：提高知识图谱的质量和覆盖度，剔除噪声数据，增强知识图谱对模型的辅助作用。
-
-- **结论**：
-
-  - 知识图谱的引入能够有效提升推荐系统的性能，但提升幅度受多种因素影响。
-  - 合理选择嵌入方式和模型结构，并结合针对性的超参数调优，能够进一步挖掘知识图谱在推荐系统中的潜力。
-
- -->
+1. **基础推荐与知识感知推荐**：
+   引入知识图谱嵌入的推荐方法显著提升了推荐性能，表明知识图谱在丰富物品表示方面的有效性。
+2. **多任务与迭代优化对比**：
+   - **多任务学习** 表现更稳定，收敛效果更优，适合大多数场景。
+   - **迭代优化** 前期表现尚可，但收敛性较差，后期性能出现波动。
+3. **知识图谱嵌入方法对比**：
+   - **逐元素相加** 的表现优于逐元素相乘，尤其在推荐结果排序质量上更胜一筹。
