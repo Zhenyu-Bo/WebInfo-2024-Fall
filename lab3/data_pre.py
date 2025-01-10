@@ -56,6 +56,12 @@ def data_pre(law_csv_path, qa_csv_path, faiss_index_path):
     law_docs = law_loader.load()
     print("加载问答数据...")
     qa_docs = qa_loader.load()
+    
+    # 去除每个文档内容中的 "data: " 前缀
+    for doc in law_docs:
+        doc.page_content = doc.page_content.lstrip('data: ')
+    for doc in qa_docs:
+        doc.page_content = doc.page_content.lstrip('data: ')
 
     # 2. 文本分割
     text_splitter = CharacterTextSplitter(
