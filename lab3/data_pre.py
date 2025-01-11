@@ -25,7 +25,7 @@ def data_pre(law_csv_path, qa_csv_path, faiss_index_path):
           便于在检索时通过索引找到对应原文。
 
     documents 结构:
-        - page_content (str): 文档的文本内容，为一条法条或一组问答。此处每一个以"data:"开头我也不知道为啥 不知道怎么取消掉
+        - page_content (str): 文档的文本内容，为一条法条或一组问答。
         - metadata (dict): 文档的元数据，包括以下字段:
             - label (str): 文档的标签，用于区分 "law"（法条） 和 "qa"（问答）
     """
