@@ -1,8 +1,10 @@
 import os
+import faiss
 from langchain_community.document_loaders import CSVLoader
 from langchain.text_splitter import CharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
+from langchain_community.docstore.in_memory import InMemoryDocstore
 
 def data_pre(law_csv_path, qa_csv_path, faiss_index_path):
     """
@@ -66,7 +68,7 @@ def data_pre(law_csv_path, qa_csv_path, faiss_index_path):
     # 2. 文本分割
     text_splitter = CharacterTextSplitter(
         separator="\n",
-        chunk_size=1000,
+        chunk_size=128,
         chunk_overlap=0,
         length_function=len,
     )
@@ -96,6 +98,26 @@ def data_pre(law_csv_path, qa_csv_path, faiss_index_path):
     
     return documents
 
+def data_pre_process(file_path, faiss_index_path):
+    data = CSVLoader(file_path=file_path, encoding='utf-8').load()
+    text_splitter = CharacterTextSplitter(separator='\n', chunk_size=128, chunk_overlap=0)
+    data = text_splitter.split_documents(data)
+    
+    embeddings = HuggingFaceEmbeddings(model_name="BAAI/bge-base-en-v1.5")
+
+    index = faiss.IndexFlatL2(len(embeddings.embed_query("hello world")))
+
+    vector_store = FAISS(
+        embedding_function=embeddings,
+        index=index,
+        docstore=InMemoryDocstore(),
+        index_to_docstore_id={}
+    )
+
+    vector_store.add_documents(data)
+    
+    vector_store.save_local(faiss_index_path)
+
 def main():
     law_csv_path = "law_data.csv"
     qa_csv_path = "qa_data.csv"
@@ -120,4 +142,5 @@ def main():
         print(f"内容: {doc.page_content}\n")
 
 if __name__ == "__main__":
-    main()
+    # main()
+    data_pre_process("law_data.csv", "faiss_index")

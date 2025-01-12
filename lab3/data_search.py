@@ -1,3 +1,7 @@
+"""
+这是一个用于文档检索的模块，包含相似性检索和全文检索功能。
+"""
+
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 from data_pre import data_pre
@@ -7,7 +11,6 @@ from whoosh.fields import Schema, TEXT, ID
 from whoosh.qparser import QueryParser
 import os
 
-# 相似性检索
 def retrieve_similar_documents(query, faiss_index_path, top_k=5):
     """
     根据查询从 FAISS 索引中检索相似文档。
@@ -31,10 +34,10 @@ def retrieve_similar_documents(query, faiss_index_path, top_k=5):
     
     return similar_docs
 
-# 全局检索
-# 创建 Whoosh 全文检索索引
 def create_search_index(documents, index_dir="indexdir"):
     """
+    创建 Whoosh 全文检索索引。
+
     输入:
         documents (List[Document]): 要索引的文档列表。
         index_dir (str): 索引目录。
@@ -54,9 +57,10 @@ def create_search_index(documents, index_dir="indexdir"):
     
     writer.commit()
 
-# 使用 Whoosh 进行全文检索
 def search_documents(query_str, index_dir="indexdir", top_k=5):
     """
+    使用 Whoosh 进行全文检索。
+
     输入:
         query_str (str): 用户的查询。
         index_dir (str): 索引目录。
@@ -74,6 +78,9 @@ def search_documents(query_str, index_dir="indexdir", top_k=5):
         return [{"title": r["title"], "content": r["content"]} for r in results]
 
 def main():
+    """
+    主函数，执行示例查询。
+    """
     law_csv_path = "law_data.csv"
     qa_csv_path = "qa_data.csv"
     faiss_index_path = "faiss_index"
@@ -89,12 +96,9 @@ def main():
     print("相似性检索结果:")
     similar_docs = retrieve_similar_documents(query, faiss_index_path)
     
-    # print("相似文档：\n")
     for i, doc in enumerate(similar_docs, 1):
         print(f"文档 {i}:")
         print(f"标签: {doc.metadata['label']}")
-        # print(f"内容: {doc.page_content}\n")
-        # 去除 "data: " 前缀
         content = doc.page_content.replace("data: ", "")
         print(f"内容: {content}\n")
         
@@ -102,9 +106,7 @@ def main():
     search_results = search_documents(query)
     for i, doc in enumerate(search_results, 1):
         print(f"文档 {i}:")
-        # print(f"标签: {doc['title']}")
         print(f"内容: {doc['content']}\n")
-
 
 if __name__ == "__main__":
     main()

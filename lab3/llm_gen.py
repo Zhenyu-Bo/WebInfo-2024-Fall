@@ -1,15 +1,24 @@
-from data_search import search_documents
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema.runnable import RunnablePassthrough
 from langchain.schema.output_parser import StrOutputParser
-from langchain_huggingface import ChatHuggingFace, HuggingFacePipeline
+from langchain_huggingface import HuggingFaceEmbeddings, HuggingFacePipeline
+from langchain_community.vectorstores import FAISS
 
-def rag_answer(query: str):
+def rag_answer(query: str, faiss_index_path):
     # 1. 检索相关文档
-    retrieved_docs = search_documents(query_str=query, index_dir="indexdir", top_k=5)
+    # 加载向量化模型
+    embeddings = HuggingFaceEmbeddings(model_name="BAAI/bge-base-en-v1.5")
+    
+    # 加载 FAISS 索引
+    vectorstore = FAISS.load_local(faiss_index_path, embeddings, allow_dangerous_deserialization=True)
+    
+    # 执行相似性检索
+    retrieved_docs = vectorstore.similarity_search(query, k=5)
+    # print(retrieved_docs)
 
     # 2. 构造上下文文本
-    context_str = "\n".join([doc["content"] for doc in retrieved_docs])
+    context_str = "\n".join([doc.page_content.replace("data: ", "") for doc in retrieved_docs])
+    # print(context_str)
 
     # 3. 构建 Prompt
     prompt = ChatPromptTemplate([
@@ -23,24 +32,36 @@ def rag_answer(query: str):
     llm = HuggingFacePipeline.from_model_id(
         model_id="Qwen/Qwen2-1.5B-Instruct",
         task="text-generation",
-        pipeline_kwargs={
-            "max_new_tokens": 512,
-            "do_sample": False,
-            "repetition_penalty": 1.2,
-        },
+        pipeline_kwargs=dict(
+            max_new_tokens=512,
+            do_sample=False,
+            repetition_penalty=1.2,
+        ),
     )
 
     # 5. 使用提示+LLM生成结果
+    retriever = vectorstore.as_retriever()
     rag_chain = (
-        {"context": retrieved_docs, "question": RunnablePassthrough()}
+        {"context": retriever, "question": RunnablePassthrough()}
         | prompt
         | llm
         | StrOutputParser()
     )
-    return rag_chain.invoke(query)
+    
+    res = rag_chain.invoke(query)
+    # print(res)
+    
+    return res
 
 # 示例调用
 if __name__ == "__main__":
-    question = "借款人去世，继承人是否应履行偿还义务？如果借款人有财产，则如何处理？"
-    answer = rag_answer(question)
-    print(answer)
+    faiss_index_path = "faiss_index"
+    # question = "借款人去世，继承人是否应履行偿还义务？"
+    # answer = rag_answer(question, faiss_index_path)
+    # print(answer)
+    questions = ["借款人去世，继承人是否应履行偿还义务？",
+                 "如何通过法律手段应对民间借贷纠纷？",
+                 "没有赡养老人就无法继承财产吗？"]
+    for question in questions:
+        answer = rag_answer(question, faiss_index_path)
+        print(answer)
