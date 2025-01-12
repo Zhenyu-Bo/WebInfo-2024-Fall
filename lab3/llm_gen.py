@@ -37,9 +37,14 @@ def rag_answer(query: str, vectorstore):
         task="text-generation",
         pipeline_kwargs=dict(
             max_new_tokens=512,
-            do_sample=False,
+            # do_sample=False,
             repetition_penalty=1.2,
+            
+            top_p=0.8,
+            top_k=20,
+            do_sample=True, # 设置为 True 以避免警告
         ),
+        device=0  # 使用 GPU
     )
 
     # 5. 使用提示+LLM生成结果
