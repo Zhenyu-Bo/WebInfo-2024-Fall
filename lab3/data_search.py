@@ -4,7 +4,7 @@
 
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
-from data_pre import data_pre
+from data_pre import data_pre_process
 
 from whoosh.index import create_in, open_dir
 from whoosh.fields import Schema, TEXT, ID
@@ -81,32 +81,30 @@ def main():
     """
     主函数，执行示例查询。
     """
+    file_path = "law_data_3k.csv"
     law_csv_path = "law_data.csv"
     qa_csv_path = "qa_data.csv"
     faiss_index_path = "faiss_index"
     
-    documents = data_pre(law_csv_path, qa_csv_path, faiss_index_path)
-    
-    # 创建全文检索索引
-    create_search_index(documents)
+    # data_pre_process(file_path, faiss_index_path)
     
     # 示例查询
-    query = "消费者权益保护法"
+    query = "借款人去世，继承人是否应履行偿还义务？"
     print(f"查询: {query}")
     print("相似性检索结果:")
     similar_docs = retrieve_similar_documents(query, faiss_index_path)
     
     for i, doc in enumerate(similar_docs, 1):
         print(f"文档 {i}:")
-        print(f"标签: {doc.metadata['label']}")
+        # print(f"标签: {doc.metadata['label']}")
         content = doc.page_content.replace("data: ", "")
         print(f"内容: {content}\n")
         
-    print("全文检索结果:")
-    search_results = search_documents(query)
-    for i, doc in enumerate(search_results, 1):
-        print(f"文档 {i}:")
-        print(f"内容: {doc['content']}\n")
+    # print("全文检索结果:")
+    # search_results = search_documents(query)
+    # for i, doc in enumerate(search_results, 1):
+    #     print(f"文档 {i}:")
+    #     print(f"内容: {doc['content']}\n")
 
 if __name__ == "__main__":
     main()

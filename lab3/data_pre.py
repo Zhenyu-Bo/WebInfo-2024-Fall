@@ -100,12 +100,20 @@ def data_pre(law_csv_path, qa_csv_path, faiss_index_path):
 
 def data_pre_process(file_path, faiss_index_path):
     data = CSVLoader(file_path=file_path, encoding='utf-8').load()
-    text_splitter = CharacterTextSplitter(separator='\n', chunk_size=128, chunk_overlap=0)
+    text_splitter = CharacterTextSplitter(separator='\n', chunk_size=256, chunk_overlap=0)
     data = text_splitter.split_documents(data)
     
     embeddings = HuggingFaceEmbeddings(model_name="BAAI/bge-base-en-v1.5")
 
-    index = faiss.IndexFlatL2(len(embeddings.embed_query("hello world")))
+    if data:
+        sample_text = data[0].page_content  # 使用实际数据中的一个样本
+        vector_dim = len(embeddings.embed_query(sample_text))
+    else:
+        raise ValueError("No data available to determine vector dimension.")
+
+    index = faiss.IndexFlatL2(vector_dim)
+    # print("Index dimension:", vector_dim)
+    # index = faiss.IndexFlatL2(len(embeddings.embed_query("hello world")))
 
     vector_store = FAISS(
         embedding_function=embeddings,
@@ -117,11 +125,14 @@ def data_pre_process(file_path, faiss_index_path):
     vector_store.add_documents(data)
     
     vector_store.save_local(faiss_index_path)
+    
+    print("FAISS index saved at", faiss_index_path)
+
 
 def main():
     law_csv_path = "law_data.csv"
     qa_csv_path = "qa_data.csv"
-    faiss_index_path = "faiss_index"
+    faiss_index_path = "faiss_index_2"
     
     documents = data_pre(law_csv_path, qa_csv_path, faiss_index_path)
     
@@ -143,4 +154,4 @@ def main():
 
 if __name__ == "__main__":
     # main()
-    data_pre_process("law_data.csv", "faiss_index")
+    data_pre_process("law_data_3k.csv", "faiss_index")
