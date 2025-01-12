@@ -23,15 +23,19 @@ def rag_answer(query: str):
             base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
         )
 
+        context_str = "\n\n".join([f"{i+1}. {doc.page_content.replace('data: ', '')}" for i, doc in enumerate(retrieved_docs)])
         completion = client.chat.completions.create(
             model="qwen-turbo",
             messages=[
-                {'role': 'system', 'content': '你是专业的法律知识问答助手。你需要使用以下检索到的上下文片段来回答问题，检索到的上下文如下：'},
-                {'role': 'system', 'content': context_str},
-                {'role': 'system', 'content': '你只能使用上述上下文来回答下面的问题。如果上下文中没有足够依据，直接回答“未找到相关答案”。'},
-                {'role': 'user', 'content': query}
+            {'role': 'system', 'content': '你是专业的法律知识问答助手。你需要使用以下检索到的上下文片段来回答问题，检索到的上下文如下：'},
+            {'role': 'system', 'content': context_str},
+            {'role': 'system', 'content': '你只能使用上述上下文来回答下面的问题。如果上下文中没有足够依据，直接回答“未找到相关答案”。'},
+            {'role': 'user', 'content': query}
             ]
         )
+        print("=================New QA===================")
+        print("User:", query)
+        print("Context:\n", context_str)
         print("=================QA===================")
         print("User:", query)
         res = completion.choices[0].message.content
