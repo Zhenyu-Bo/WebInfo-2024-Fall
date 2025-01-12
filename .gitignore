@@ -4,3 +4,5 @@ lab2/data/freebase_douban.gz
 __pycache__/
 rag_tmp.ipynb
 *.log
+
+lab3/indexdir
