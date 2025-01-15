@@ -3,6 +3,7 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 
 GDH_API_KEY = "sk-66ccd9858bc24cce93e1b5f9ae542262"
+BZY_API_KEY = "sk-a11ed5e5b3a3473e86b42adb46571436"
 
 # 加载向量化模型和FAISS索引到内存中
 embeddings = HuggingFaceEmbeddings(model_name="BAAI/bge-base-en-v1.5")
@@ -11,7 +12,7 @@ vectorstore = FAISS.load_local(faiss_index_path, embeddings, allow_dangerous_des
 
 def rag_answer(query: str):
     # 1. 检索相关文档
-    retrieved_docs = vectorstore.similarity_search(query, k=10)
+    retrieved_docs = vectorstore.similarity_search(query, k=5)
 
     # 2. 构造上下文文本
     context_str = "\n".join([doc.page_content.replace("data: ", "") for doc in retrieved_docs])
@@ -19,29 +20,31 @@ def rag_answer(query: str):
     # 3. 接入通义千问qwen-turbo API，构建 Prompt
     try:
         client = OpenAI(
-            api_key= GDH_API_KEY,
+            # api_key= GDH_API_KEY,
+            api_key = BZY_API_KEY,
             base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
         )
 
         context_str = "\n\n".join([f"{i+1}. {doc.page_content.replace('data: ', '')}" for i, doc in enumerate(retrieved_docs)])
         completion = client.chat.completions.create(
-            model="qwen-turbo",
+            model="qwen-plus",
             messages=[
             {'role': 'system', 'content': '你是专业的法律知识问答助手。你需要使用以下检索到的上下文片段来回答问题，检索到的上下文如下：'},
             {'role': 'system', 'content': context_str},
-            {'role': 'system', 'content': '你只能使用上述上下文来回答下面的问题。如果上下文中没有足够依据，直接回答“未找到相关答案”。'},
-            {'role': 'user', 'content': query}
+            {'role': 'system', 'content': '你只能使用上述上下文来回答下面的问题，禁止根据常识和已知信息回答问题。如果上下文中没有足够依据，直接回答“未找到相关答案”。'},
+            {'role': 'user', 'content': query},
+            {'role': 'system', 'content': '请根据上下文和问题一步一步推导出答案。'}
             ]
         )
         print("=================New QA===================")
-        print("User:", query)
-        print("Context:\n", context_str)
-        print("=================QA===================")
-        print("User:", query)
+        # print("User:", query)
+        print("Question:", query)
+        # print("Context:\n", context_str)
+        # print("=================QA===================")
         res = completion.choices[0].message.content
-        print("Assistant:", res)
-        print()
-        print()
+        print("Answer:", res)
+        # print()
+        # print()
     except Exception as e:
         print(f"错误信息：{e}")
         print("请参考文档：https://help.aliyun.com/zh/model-studio/developer-reference/error-code")

@@ -18,8 +18,8 @@ def direct_answer(question: str):
         )
         res = response.choices[0].message.content
         print("=================New QA===================")
-        print("User:", question)
-        print("Assistant:", res)
+        print("Question:", question)
+        print("Answer:", res)
         # 将输出存储到文件中
         with open("answer_no_rag.txt", "a", encoding="utf-8") as f:
             f.write(f"User: {question}\n")

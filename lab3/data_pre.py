@@ -153,5 +153,5 @@ def main():
         print(f"内容: {doc.page_content}\n")
 
 if __name__ == "__main__":
-    # main()
-    data_pre_process("law_data_3k.csv", "faiss_index")
+    main()
+    # data_pre_process("law_data_3k.csv", "faiss_index")
